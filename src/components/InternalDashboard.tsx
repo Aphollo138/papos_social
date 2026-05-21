@@ -29,7 +29,9 @@ import {
   Trash,
   Shield,
   Camera,
-  Smile
+  Smile,
+  Mars,
+  Venus
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
@@ -997,152 +999,172 @@ export function InternalDashboard(props: InternalDashboardProps) {
         </div>
       </div>
 
-      {/* PAINEL DE FILTROS EXPANSÍVEL (SÓ NO FEED MATCH) */}
-      {activeTab === 'feed' && isFilterOpen && (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.96, y: -10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: -10 }}
-          transition={{ duration: 0.15 }}
-          className="w-full bg-white border-3 border-black rounded-2xl p-4 mb-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] text-left space-y-3.5 z-50 relative"
-        >
-          <div className="flex items-center justify-between border-b border-black/10 pb-2">
-            <h4 className="font-mono font-black text-[11px] uppercase tracking-wider text-black flex items-center gap-1.5">
-              <Sliders size={12} className="text-brand-purple" />
-              <span>Parâmetros de Match</span>
-            </h4>
-            <button 
-              onClick={() => setIsFilterOpen(false)}
-              className="text-[9px] font-mono font-black px-2 py-1 bg-black text-white hover:bg-neutral-800 rounded-lg transition-colors shadow-[1px_1px_0px_#000]"
+      {/* PAINEL DE FILTROS COMPLETO ESTILO MODAL GIGANTE (SÓ NO FEED MATCH) */}
+      <AnimatePresence>
+        {activeTab === 'feed' && isFilterOpen && (
+          <div className="fixed inset-0 bg-neutral-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.94, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 30 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              className="w-full max-w-sm bg-[#FAF9F5] border-3 border-black rounded-[36px] p-6 shadow-[8px_8px_0px_rgba(0,0,0,1)] text-left space-y-5 flex flex-col max-h-[92vh] overflow-y-auto"
             >
-              Aplicar ×
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-            {/* Filtro Sexo */}
-            <div className="space-y-1">
-              <label className="text-[9px] uppercase font-bold font-mono text-black/50 block">Gênero Alvo</label>
-              <select 
-                value={activeFilterGender}
-                onChange={(e) => {
-                  setActiveFilterGender(e.target.value);
-                  setCurrentProfileIndex(0);
-                }}
-                className="w-full bg-[#FAF9F5] border-2 border-black rounded-xl p-2 font-bold text-xs select-none shadow-[1.5px_1.5px_0px_#000] focus:translate-y-0.5 focus:shadow-none transition-all outline-none"
-              >
-                <option value="Todos">Todos Gêneros 👥</option>
-                <option value="Feminino">Feminino 👩</option>
-                <option value="Masculino">Masculino 👨</option>
-              </select>
-              {userProfile?.gender && (
-                <span className="text-[8px] font-mono font-semibold text-brand-purple block mt-1 leading-none">
-                  🎯 Auto: {userProfile.gender === 'Masculino' ? 'Feminino' : 'Masculino'} (Sua preferência)
-                </span>
-              )}
-            </div>
-
-            {/* Filtro Nicho */}
-            <div className="space-y-1">
-              <label className="text-[9px] uppercase font-bold font-mono text-black/50 block">Nicho</label>
-              <select 
-                value={activeFilterNiche}
-                onChange={(e) => {
-                  setActiveFilterNiche(e.target.value);
-                  setCurrentProfileIndex(0);
-                }}
-                className="w-full bg-[#FAF9F5] border-2 border-black rounded-xl p-2 font-bold text-xs select-none shadow-[1.5px_1.5px_0px_#000] focus:translate-y-0.5 focus:shadow-none transition-all outline-none"
-              >
-                <option value="Todos">Todos Nichos 🌟</option>
-                <option value="Fitness">🏋️‍♂️ Fitness</option>
-                <option value="Moda">👗 Moda</option>
-                <option value="Tecnologia">💻 Tecnologia</option>
-                <option value="Viagem">✈️ Viagem</option>
-                <option value="Arte">🎨 Arte</option>
-                <option value="Música">🎵 Música</option>
-              </select>
-            </div>
-
-            {/* Filtro Idade */}
-            <div className="space-y-1">
-              <label className="text-[9px] uppercase font-bold font-mono text-black/50 block">Idade (16 até 99)</label>
-              <div className="flex items-center gap-1.5">
-                <div className="flex-1">
-                  <span className="text-[7.5px] font-mono text-black/40 block">Mín</span>
-                  <input 
-                    type="number" 
-                    min="16" 
-                    max="99"
-                    value={filterAgeMin}
-                    onChange={(e) => {
-                      const val = Math.max(16, Math.min(99, parseInt(e.target.value) || 16));
-                      setFilterAgeMin(val);
-                      setCurrentProfileIndex(0);
-                    }}
-                    className="w-full text-center bg-[#FAF9F5] border-2 border-black rounded-xl p-1.5 font-bold text-xs outline-none shadow-[1.5px_1.5px_0px_#000]"
-                  />
+              {/* Cabeçalho */}
+              <div className="flex items-center justify-between border-b-2 border-black/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-brand-purple rounded-xl border-2 border-black shadow-[2px_2px_0px_#000]">
+                    <Sliders size={16} className="text-black" />
+                  </div>
+                  <div>
+                    <h4 className="font-display font-black text-sm uppercase tracking-wider text-black leading-tight">
+                      Configurar Filtros
+                    </h4>
+                    <p className="text-[9px] font-mono text-black/55">Encontre criadores ideais</p>
+                  </div>
                 </div>
-                <span className="font-mono text-black self-end pb-2 font-black">-</span>
-                <div className="flex-1">
-                  <span className="text-[7.5px] font-mono text-black/40 block">Máx</span>
-                  <input 
-                    type="number" 
-                    min="16" 
-                    max="99"
-                    value={filterAgeMax}
-                    onChange={(e) => {
-                      const val = Math.max(16, Math.min(99, parseInt(e.target.value) || 99));
-                      setFilterAgeMax(val);
-                      setCurrentProfileIndex(0);
-                    }}
-                    className="w-full text-center bg-[#FAF9F5] border-2 border-black rounded-xl p-1.5 font-bold text-xs outline-none shadow-[1.5px_1.5px_0px_#000]"
-                  />
-                </div>
+                <button 
+                  type="button"
+                  onClick={() => setIsFilterOpen(false)}
+                  className="p-1.5 bg-white border-2 border-black hover:bg-neutral-100 rounded-xl transition-all shadow-[2px_2px_0px_#000] active:translate-y-0.5 active:shadow-none cursor-pointer"
+                >
+                  <X size={14} className="text-black" />
+                </button>
               </div>
-            </div>
-          </div>
-          
-          <div className="text-[9px] font-mono text-neutral-500 text-right leading-none pt-1">
-            {filteredProfiles.length} criadores correspondentes encontrados.
-          </div>
-        </motion.div>
-      )}
 
-      {/* ABAS ESTILO YUBO: ARRASTE / RECOMENDADOS (SÓ NO FEED MATCH) */}
-      {activeTab === 'feed' && (
-        <div className="flex bg-neutral-200/60 border-2 border-black p-1 rounded-2xl w-full max-w-[280px] mx-auto shadow-[2px_2px_0px_#000] mb-5">
-          <button 
-            onClick={() => {
-              setActiveFilterGender('Todos');
-              setActiveFilterNiche('Todos');
-              setCurrentProfileIndex(0);
-            }}
-            className={cn(
-              "flex-1 py-1.5 rounded-xl text-[11px] font-black font-mono transition-all uppercase tracking-wide",
-              activeFilterGender === 'Todos' && activeFilterNiche === 'Todos'
-                ? "bg-black text-white" 
-                : "text-black hover:bg-black/5"
-            )}
-          >
-            Arraste
-          </button>
-          <button 
-            onClick={() => {
-              const matchesPreferGender = userProfile?.gender === 'Masculino' ? 'Feminino' : 'Todos';
-              setActiveFilterGender(matchesPreferGender);
-              setCurrentProfileIndex(0);
-            }}
-            className={cn(
-              "flex-1 py-1.5 rounded-xl text-[11px] font-black font-mono transition-all uppercase tracking-wide relative",
-              activeFilterGender !== 'Todos'
-                ? "bg-brand-purple text-black border border-black shadow-[1.5px_1.5px_0px_#000]" 
-                : "text-black hover:bg-black/5"
-            )}
-          >
-            Para Você <span className="absolute top-1 right-2 w-2 h-2 bg-[#FFD166] rounded-full border border-black animate-pulse" />
-          </button>
-        </div>
-      )}
+              {/* Corpo dos Filtros */}
+              <div className="space-y-4">
+                
+                {/* Filtro de Gênero com Ícones Neo-Brutalist Mars e Venus */}
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase font-black font-mono tracking-wider text-black/60 block">Gênero Alvo</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: 'Feminino', label: 'Feminino', icon: Venus, color: 'hover:bg-pink-100/60' },
+                      { value: 'Masculino', label: 'Masculino', icon: Mars, color: 'hover:bg-blue-100/60' },
+                      { value: 'Todos', label: 'Todos', icon: Users, color: 'hover:bg-purple-100/60' }
+                    ].map((g) => {
+                      const IconComp = g.icon;
+                      const isSelected = activeFilterGender === g.value;
+                      return (
+                        <button
+                          key={g.value}
+                          type="button"
+                          onClick={() => {
+                            setActiveFilterGender(g.value);
+                            setCurrentProfileIndex(0);
+                          }}
+                          className={cn(
+                            "flex flex-col items-center justify-center gap-1.5 p-3 border-2 border-black rounded-2xl transition-all shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-0.5 cursor-pointer text-[10px] font-black font-mono",
+                            isSelected 
+                              ? "bg-[#FFD166] text-black border-2 border-black" 
+                              : "bg-white text-black " + g.color
+                          )}
+                        >
+                          <IconComp size={16} className="text-black stroke-[3]" />
+                          <span>{g.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {userProfile?.gender && (
+                    <span className="text-[8px] font-mono font-medium text-brand-purple block mt-1 leading-none text-center">
+                      🎯 Sugerido conforme seu perfil.
+                    </span>
+                  )}
+                </div>
+
+                {/* Filtro de Nicho */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase font-black font-mono tracking-wider text-black/60 block">Nicho de Conteúdo</label>
+                  <select 
+                    value={activeFilterNiche}
+                    onChange={(e) => {
+                      setActiveFilterNiche(e.target.value);
+                      setCurrentProfileIndex(0);
+                    }}
+                    className="w-full bg-white border-2 border-black rounded-xl p-2.5 font-bold text-xs select-none shadow-[2px_2px_0px_#000] focus:translate-y-0.5 focus:shadow-none transition-all outline-none"
+                  >
+                    <option value="Todos">Todos Nichos de Trabalho 🌟</option>
+                    <option value="Fitness">🏋️‍♂️ Fitness & Academia</option>
+                    <option value="Moda">👗 Moda & Estilo</option>
+                    <option value="Tecnologia">💻 Tecnologia & Criação</option>
+                    <option value="Viagem">✈️ Viagem & Vlogs</option>
+                    <option value="Arte">🎨 Arte & Design</option>
+                    <option value="Música">🎵 Música & Shows</option>
+                  </select>
+                </div>
+
+                {/* Filtro de Idade Completo de Arraste (Sliders de 16 a 99) */}
+                <div className="space-y-3 bg-white p-3.5 border-2 border-black rounded-2xl">
+                  <span className="text-[10px] uppercase font-black font-mono tracking-wider text-black/60 block">Faixa Etária (16 até 99 anos)</span>
+                  
+                  <div className="space-y-3">
+                    {/* Mínima */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[10px] font-mono">
+                        <span className="text-neutral-500">Idade Mínima:</span>
+                        <strong className="text-black font-mono">{filterAgeMin} anos</strong>
+                      </div>
+                      <input 
+                        type="range"
+                        min="16"
+                        max="99"
+                        value={filterAgeMin}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          setFilterAgeMin(val);
+                          if (val > filterAgeMax) {
+                            setFilterAgeMax(val);
+                          }
+                          setCurrentProfileIndex(0);
+                        }}
+                        className="w-full accent-black cursor-pointer bg-neutral-200 h-1.5 rounded-lg appearance-none"
+                      />
+                    </div>
+
+                    {/* Máxima */}
+                    <div className="space-y-1 border-t border-dashed border-black/10 pt-2">
+                      <div className="flex justify-between items-center text-[10px] font-mono">
+                        <span className="text-neutral-500">Idade Máxima:</span>
+                        <strong className="text-black font-mono">{filterAgeMax} anos</strong>
+                      </div>
+                      <input 
+                        type="range"
+                        min="16"
+                        max="99"
+                        value={filterAgeMax}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          setFilterAgeMax(val);
+                          if (val < filterAgeMin) {
+                            setFilterAgeMin(val);
+                          }
+                          setCurrentProfileIndex(0);
+                        }}
+                        className="w-full accent-black cursor-pointer bg-neutral-200 h-1.5 rounded-lg appearance-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Botão de Aplicar e Sincronizar */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFilterOpen(false)}
+                  className="w-full bg-[#10B981] hover:bg-[#059669] text-white font-black font-mono text-xs py-3.5 border-2 border-black rounded-2xl transition-all shadow-[4px_4px_0px_#000] active:translate-y-0.5 active:shadow-none cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Check size={14} className="stroke-[3]" />
+                  <span>APLICAR ({filteredProfiles.length} ENCONTRADOS)</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* RECENT ACTIONS SYSTEM FLOAT-BANNER */}
       <AnimatePresence>
@@ -1178,7 +1200,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.96, y: -12 }}
                     transition={{ duration: 0.22 }}
-                    className="w-full h-[490px] xs:h-[520px] sm:h-[550px] md:h-[580px] bg-neutral-900 border-4 border-black rounded-[32px] shadow-[6px_6px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col relative"
+                    className="w-full h-[540px] xs:h-[580px] sm:h-[620px] md:h-[650px] bg-neutral-900 border-4 border-black rounded-[32px] shadow-[6px_6px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col relative"
                   >
                     
                     {/* IMAGENS ROTATIVAS DO CRIADOR */}
