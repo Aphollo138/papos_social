@@ -34,6 +34,43 @@ import {
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 
+const compressImageBase64 = (base64Str: string, maxWidth = 300, maxHeight = 300): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      } else {
+        resolve(base64Str);
+      }
+    };
+    img.onerror = () => {
+      resolve(base64Str);
+    };
+  });
+};
+
 // --- STYLED INTERFACES & PROPS ---
 interface InternalDashboardProps {
   user: any;
@@ -410,8 +447,19 @@ export function InternalDashboard(props: InternalDashboardProps) {
 
   // States adicionais para o perfil de alta fidelidade Yubo-Style (Salva tudo local + Supabase)
   const [userPhotos, setUserPhotos] = useState<string[]>(() => {
+    // Tenta carregar primeiro do userProfile se já vier preenchido
     if (userProfile?.images && userProfile.images.length > 0) {
       return userProfile.images;
+    }
+    // Tenta decodificar da bio do userProfile se estiver compactado lá
+    if (userProfile?.bio && userProfile.bio.includes('[FW_METADATA_V1]')) {
+      try {
+        const parts = userProfile.bio.split('[FW_METADATA_V1]');
+        const meta = JSON.parse(parts[1].trim());
+        if (meta.images && meta.images.length > 0) {
+          return meta.images;
+        }
+      } catch (e) {}
     }
     if (userProfile?.avatar_url) {
       return [userProfile.avatar_url];
@@ -421,12 +469,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const clean = parsed.filter((img: string) => 
-            img && 
-            !img.includes("photo-1506794778202") && 
-            !img.includes("photo-1544005313-94ddf0286df2")
-          );
-          if (clean.length > 0) return clean;
+          return parsed;
         }
       }
     } catch (e) {}
@@ -494,35 +537,58 @@ export function InternalDashboard(props: InternalDashboardProps) {
 
   useEffect(() => {
     if (userProfile) {
+      let finalBio = userProfile.bio || '';
+      let finalImages = userProfile.images || [];
+      let finalAge = userProfile.age || 25;
+      let finalGender = userProfile.gender || 'Masculino';
+      let finalLocation = userProfile.location || 'São Paulo, SP';
+      let finalProfession = userProfile.profession || userProfession;
+      let finalEmojis = userProfile.emojis ? Array.from(userProfile.emojis) : userEmojis;
+      let finalVerified = userProfile.is_verified !== undefined ? userProfile.is_verified : isVerified;
+      let finalViews = userProfile.views || profileViews;
+      let finalFriends = userProfile.friends_added || friendsAddedCount;
+
+      // Executa a decodificação de metadados se existir na bio
+      if (userProfile.bio && userProfile.bio.includes('[FW_METADATA_V1]')) {
+        try {
+          const parts = userProfile.bio.split('[FW_METADATA_V1]');
+          finalBio = parts[0].trim();
+          const meta = JSON.parse(parts[1].trim());
+
+          finalImages = meta.images || finalImages;
+          finalAge = meta.age || finalAge;
+          finalGender = meta.gender || finalGender;
+          finalLocation = meta.location || finalLocation;
+          finalProfession = meta.profession || finalProfession;
+          finalEmojis = meta.emojis || finalEmojis;
+          if (meta.is_verified !== undefined) finalVerified = meta.is_verified;
+          finalViews = meta.views || finalViews;
+          finalFriends = meta.friends_added || finalFriends;
+        } catch (e) {
+          console.warn('Erro ao decodificar metadados de bio no useEffect:', e);
+        }
+      }
+
       setProfileForm({
         name: userProfile.full_name || 'Seu Nome',
         username: userProfile.instagram_username || 'seu_instagram',
-        bio: userProfile.bio || '',
-        age: userProfile.age || 25,
-        gender: userProfile.gender || 'Masculino',
-        location: userProfile.location || 'São Paulo, SP'
+        bio: finalBio,
+        age: finalAge,
+        gender: finalGender,
+        location: finalLocation
       });
-      if (userProfile.images && userProfile.images.length > 0) {
-        const clean = userProfile.images.filter((img: string) => 
-          img && 
-          !img.includes("photo-1506794778202") && 
-          !img.includes("photo-1544005313-94ddf0286df2")
-        );
-        if (clean.length > 0) {
-          setUserPhotos(clean);
-        } else if (userProfile.avatar_url) {
-          setUserPhotos([userProfile.avatar_url]);
-        }
+
+      if (finalImages && finalImages.length > 0) {
+        setUserPhotos(finalImages);
       } else if (userProfile.avatar_url) {
         setUserPhotos([userProfile.avatar_url]);
       }
-      if (userProfile.emojis) {
-        // Quebrar string de emojis em array de caracteres individuais
-        setUserEmojis(Array.from(userProfile.emojis));
-      }
-      if (userProfile.profession) {
-        setUserProfession(userProfile.profession);
-      }
+
+      setUserEmojis(finalEmojis);
+      setUserProfession(finalProfession);
+      setIsVerified(finalVerified);
+      setProfileViews(finalViews);
+      setFriendsAddedCount(finalFriends);
     }
   }, [userProfile]);
 
@@ -531,6 +597,21 @@ export function InternalDashboard(props: InternalDashboardProps) {
     try {
       const cleanUsername = profileForm.username.replace('@', '').trim().toLowerCase();
       const updatedAge = parseInt(profileForm.age.toString()) || 25;
+      const cleanBioText = profileForm.bio.split('[FW_METADATA_V1]')[0].trim();
+
+      const metadata = {
+        images: updatedPhotos,
+        age: updatedAge,
+        gender: profileForm.gender,
+        location: profileForm.location,
+        profession: userProfession,
+        emojis: userEmojis,
+        is_verified: isVerified,
+        views: profileViews,
+        friends_added: friendsAddedCount
+      };
+
+      const finalBioWithMetadata = `${cleanBioText}\n\n[FW_METADATA_V1]${JSON.stringify(metadata)}`;
 
       const { error } = await supabase
         .from('profiles')
@@ -538,7 +619,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
           id: user.id,
           instagram_username: cleanUsername,
           full_name: profileForm.name,
-          bio: profileForm.bio,
+          bio: finalBioWithMetadata,
           age: updatedAge,
           gender: profileForm.gender,
           location: profileForm.location,
@@ -548,7 +629,24 @@ export function InternalDashboard(props: InternalDashboardProps) {
         });
 
       if (error) {
-        console.warn('Erro ao salvar fotos no Supabase:', error.message);
+        console.warn('Erro ao salvar no Supabase com colunas completas, tentando gravação resiliente na bio...', error.message);
+        
+        const { error: fallbackError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            instagram_username: cleanUsername,
+            full_name: profileForm.name,
+            bio: finalBioWithMetadata,
+            avatar_url: updatedPhotos[0] || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=300&auto=format&fit=crop',
+            updated_at: new Date().toISOString()
+          });
+
+        if (fallbackError) {
+          console.error('Erro crítico no fallback ao salvar fotos:', fallbackError.message);
+        } else {
+          console.log('Fotos salvas na bio estruturada com sucesso!');
+        }
       } else {
         console.log('Fotos salvas no Supabase!');
       }
@@ -562,27 +660,22 @@ export function InternalDashboard(props: InternalDashboardProps) {
     try {
       const cleanUsername = profileForm.username.replace('@', '').trim().toLowerCase();
       const updatedAge = parseInt(profileForm.age.toString()) || 25;
+      const cleanBioText = profileForm.bio.split('[FW_METADATA_V1]')[0].trim();
 
-      const { error } = await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id,
-          instagram_username: cleanUsername,
-          full_name: profileForm.name,
-          bio: profileForm.bio,
-          age: updatedAge,
-          gender: profileForm.gender,
-          location: profileForm.location,
-          images: userPhotos,
-          avatar_url: userPhotos[0] || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=300&auto=format&fit=crop',
-          updated_at: new Date().toISOString()
-        });
+      const metadata = {
+        images: userPhotos,
+        age: updatedAge,
+        gender: profileForm.gender,
+        location: profileForm.location,
+        profession: userProfession,
+        emojis: userEmojis,
+        is_verified: isVerified,
+        views: profileViews,
+        friends_added: friendsAddedCount
+      };
 
-      if (error) {
-        console.warn('Erro ao atualizar Supabase, salvando local:', error.message);
-      }
+      const finalBioWithMetadata = `${cleanBioText}\n\n[FW_METADATA_V1]${JSON.stringify(metadata)}`;
 
-      // Salva as propriedades no localStorage atreladas ao usuário logado
       const userId = user?.id || 'guest';
       localStorage.setItem(`fw_photos_${userId}`, JSON.stringify(userPhotos));
       localStorage.setItem(`fw_tags_${userId}`, JSON.stringify(userTags));
@@ -593,15 +686,49 @@ export function InternalDashboard(props: InternalDashboardProps) {
       localStorage.setItem(`fw_views_${userId}`, profileViews.toString());
       localStorage.setItem(`fw_friends_added_${userId}`, friendsAddedCount.toString());
 
-      // ...
-      const userProfileLocation = profileForm.location;
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          instagram_username: cleanUsername,
+          full_name: profileForm.name,
+          bio: finalBioWithMetadata,
+          age: updatedAge,
+          gender: profileForm.gender,
+          location: profileForm.location,
+          images: userPhotos,
+          avatar_url: userPhotos[0] || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=300&auto=format&fit=crop',
+          updated_at: new Date().toISOString()
+        });
 
-      // Atualiza o estado global e repassa ao context
+      if (error) {
+        console.warn('Erro ao atualizar Supabase com colunas completas, aplicando gravação resiliente na bio...', error.message);
+        
+        const { error: fallbackError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            instagram_username: cleanUsername,
+            full_name: profileForm.name,
+            bio: finalBioWithMetadata,
+            avatar_url: userPhotos[0] || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=300&auto=format&fit=crop',
+            updated_at: new Date().toISOString()
+          });
+
+        if (fallbackError) {
+          console.error('Erro crítico no fallback do Supabase:', fallbackError.message);
+        } else {
+          console.log('Perfil salvo com sucesso no Supabase via bio comprimida!');
+        }
+      } else {
+        console.log('Perfil atualizado com sucesso no Supabase!');
+      }
+
       setUserProfile({
         ...userProfile,
         full_name: profileForm.name,
         instagram_username: cleanUsername,
-        bio: profileForm.bio,
+        bio: cleanBioText,
         age: updatedAge,
         gender: profileForm.gender,
         images: userPhotos,
@@ -609,7 +736,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
         emojis: userEmojis.join(''),
         profession: userProfession,
         is_verified: isVerified,
-        location: userProfileLocation
+        location: profileForm.location
       });
 
       triggerActionAlert('Seu perfil foi atualizado e salvo com sucesso! 💎🌊');
@@ -1460,13 +1587,19 @@ export function InternalDashboard(props: InternalDashboardProps) {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        if (file.size > 2 * 1024 * 1024) {
-                          triggerActionAlert("Por favor, envie uma foto de até 2MB!");
+                        if (file.size > 8 * 1024 * 1024) {
+                          triggerActionAlert("Por favor, envie uma foto de até 8MB!");
                           return;
                         }
                         const reader = new FileReader();
-                        reader.onloadend = () => {
+                        reader.onloadend = async () => {
                           const base64Img = reader.result as string;
+                          let finalImg = base64Img;
+                          try {
+                            finalImg = await compressImageBase64(base64Img);
+                          } catch (err) {
+                            console.warn("Falha ao compactar imagem da galeria:", err);
+                          }
                           
                           setIsModeratingImage(true);
                           setModerationMessage("Scaneando biometria do rosto... 👤");
@@ -1474,11 +1607,11 @@ export function InternalDashboard(props: InternalDashboardProps) {
                           setTimeout(() => {
                             setModerationMessage("Validando integridade e anti-fraude... 🛡️");
                           }, 1000);
-
+ 
                           setTimeout(() => {
                             setIsModeratingImage(false);
                             setUserPhotos(prev => {
-                              const updated = [...prev, base64Img];
+                              const updated = [...prev, finalImg];
                               localStorage.setItem(`fw_photos_${user?.id || 'guest'}`, JSON.stringify(updated));
                               savePhotosToSupabaseDirect(updated);
                               return updated;

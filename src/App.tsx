@@ -463,6 +463,43 @@ const AuthModal = ({ isOpen, mode, onClose, onSwitch }: { isOpen: boolean, mode:
   );
 };
 
+const compressImageBase64 = (base64Str: string, maxWidth = 300, maxHeight = 300): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      } else {
+        resolve(base64Str);
+      }
+    };
+    img.onerror = () => {
+      resolve(base64Str);
+    };
+  });
+};
+
 const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<any>(null);
@@ -491,13 +528,19 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => voi
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert('Por favor, envie uma foto de até 2MB!');
+      if (file.size > 8 * 1024 * 1024) {
+        alert('Por favor, envie uma foto de até 8MB!');
         return;
       }
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setManualForm(prev => ({ ...prev, avatar: reader.result as string }));
+      reader.onloadend = async () => {
+        const base64Img = reader.result as string;
+        try {
+          const compressed = await compressImageBase64(base64Img);
+          setManualForm(prev => ({ ...prev, avatar: compressed }));
+        } catch (err) {
+          setManualForm(prev => ({ ...prev, avatar: base64Img }));
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -894,7 +937,29 @@ export default function App() {
         .single();
       
       if (data) {
-        setUserProfile(data);
+        let finalProfile = { ...data };
+        // Caso tenhamos os dados codificados como metadados na bio por resiliência
+        if (data.bio && data.bio.includes('[FW_METADATA_V1]')) {
+          try {
+            const parts = data.bio.split('[FW_METADATA_V1]');
+            finalProfile.bio = parts[0].trim();
+            const metaJSON = JSON.parse(parts[1].trim());
+            
+            // Injeta as propriedades estendidas decodificadas diretamente
+            finalProfile.images = metaJSON.images || finalProfile.images;
+            finalProfile.age = metaJSON.age || finalProfile.age;
+            finalProfile.gender = metaJSON.gender || finalProfile.gender;
+            finalProfile.location = metaJSON.location || finalProfile.location;
+            finalProfile.profession = metaJSON.profession || finalProfile.profession;
+            finalProfile.emojis = metaJSON.emojis || finalProfile.emojis;
+            finalProfile.is_verified = metaJSON.is_verified !== undefined ? metaJSON.is_verified : finalProfile.is_verified;
+            finalProfile.views = metaJSON.views || finalProfile.views;
+            finalProfile.friends_added = metaJSON.friends_added || finalProfile.friends_added;
+          } catch (e) {
+            console.warn('Erro ao ler metadados embutidos da bio no fetch do App:', e);
+          }
+        }
+        setUserProfile(finalProfile);
       } else {
         // Fallback robusto se a linha no banco ainda não foi criada
         setUserProfile({
