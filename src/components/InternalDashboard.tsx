@@ -626,16 +626,13 @@ export function InternalDashboard(props: InternalDashboardProps) {
   };
 
   return (
-    <div className="bg-[#FAF9F5] min-h-[88vh] pb-20 md:pb-28 pt-2 md:pt-4 px-1.5 md:px-8 max-w-6xl mx-auto relative antialiased text-black">
+    <div className="bg-[#FAF9F5] min-h-screen pb-14 pt-1 px-1.5 sm:px-4 max-w-xl mx-auto relative antialiased text-black">
       
-      {/* HEADER DA ÁREA INTERNA - ESTILO NATIVO COMPACTO (Evita Scroll / Super Responsivo) */}
-      <div className="flex items-center justify-between w-full py-2.5 px-3 mb-4 bg-white border-3 border-black rounded-2xl shadow-[3px_3px_0px_rgba(0,0,0,1)] sticky top-0 z-[110]">
+      {/* HEADER DA ÁREA INTERNA - ESTILO COMPACTO SEM BORDAS */}
+      <div className="flex items-center justify-between w-full py-2 px-1 mb-3 bg-[#FAF9F5]/90 backdrop-blur-md sticky top-0 z-[110]">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-brand-purple border-2 border-black rounded-xl flex items-center justify-center shadow-[1.5px_1.5px_0px_#000]">
-            <Sparkles className="w-4.5 h-4.5 text-black" fill="currentColor" />
-          </div>
           <div>
-            <span className="text-xl font-display font-black tracking-tight text-white block leading-none [text-shadow:_1.5px_1.5px_0_#000,\_-1px_-1px_0_#000,_1.5px_-1px_0_#000,\_-1px_1.5px_0_#000]">
+            <span className="text-xl font-display font-black tracking-tight text-black block leading-none">
               FollowWave
             </span>
           </div>
@@ -1275,22 +1272,22 @@ export function InternalDashboard(props: InternalDashboardProps) {
         )}
 
         {activeTab === 'profile' && (
-          <div className="w-full max-w-xl mx-auto pb-24 text-left animate-in fade-in duration-300 px-2 sm:px-0">
+          <div className="w-full max-w-xl mx-auto pb-10 text-left animate-in fade-in duration-300 px-1 sm:px-0">
             
             {/* IF COMPONENT IS IN VIEW MODE (Visualizar Perfil) */}
             {profileActiveSubTab === 'view' && (
-              <div className="bg-white border-4 border-black rounded-[36px] p-6 shadow-[8px_8px_0px_rgba(0,0,0,1)] relative overflow-hidden flex flex-col gap-5 bg-gradient-to-b from-white to-[#FAF9F5] group">
+              <div className="bg-white border-3 border-black rounded-[24px] p-4.5 sm:p-5.5 shadow-[4px_4px_0px_rgba(0,0,0,1)] relative overflow-hidden flex flex-col gap-3.5 bg-gradient-to-b from-white to-[#FAF9F5] group">
                 
                 {/* Badge de Verificação Ativa no Canto */}
                 {isVerified && (
-                  <div className="absolute top-4 right-4 z-10 flex items-center gap-1 bg-[#10B981] text-white border-2 border-black rounded-lg px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-wider font-extrabold shadow-[2px_2px_0px_#000] select-none">
-                    <Shield size={10} />
+                  <div className="absolute top-3.5 right-3.5 z-10 flex items-center gap-1 bg-[#10B981] text-white border-2 border-black rounded-lg px-2 py-0.5 font-mono text-[8.5px] uppercase tracking-wider font-extrabold shadow-[1.5px_1.5px_0px_#000] select-none">
+                    <Shield size={9} />
                     <span>AUTÊNTICO</span>
                   </div>
                 )}
 
                 {/* TOPO: Avatar Centralizado e Nome */}
-                <div className="text-center relative pt-4">
+                <div className="text-center relative pt-2">
                   
                   {/* Foto Redonda Grande Centralizada (Clicável para focar uploader/editar) */}
                   <div 
@@ -1298,46 +1295,46 @@ export function InternalDashboard(props: InternalDashboardProps) {
                       setProfileActiveSubTab('edit');
                       triggerActionAlert("Ativando formulário para gerenciar suas fotos de portfólio! 👇✨");
                     }}
-                    className="relative w-28 h-28 mx-auto cursor-pointer group"
+                    className="relative w-24 h-24 mx-auto cursor-pointer group"
                     title="Quer gerenciar fotos e dados?"
                   >
                     <img 
                       src={userPhotos[0] || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop'} 
-                      className="w-full h-full rounded-full border-4 border-black object-cover shadow-[4px_4px_0px_rgba(0,0,0,0.15)] bg-neutral-100 group-hover:scale-105 group-hover:border-brand-purple transition-all duration-300"
+                      className="w-full h-full rounded-full border-3 border-black object-cover shadow-[3px_3px_0px_rgba(0,0,0,0.15)] bg-neutral-100 group-hover:scale-105 group-hover:border-brand-purple transition-all duration-300"
                       alt="Foto de Perfil"
                     />
                     {/* Floating Camera Icon */}
-                    <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#B088F9] border-2 border-black rounded-full flex items-center justify-center shadow-[1px_1px_0px_#000] scale-90 group-hover:scale-105 transition-transform">
-                      <Camera size={13} className="text-black" />
+                    <div className="absolute -bottom-1 -right-1 w-7.5 h-7.5 bg-[#B088F9] border-2 border-black rounded-full flex items-center justify-center shadow-[1px_1px_0px_#000] scale-90 group-hover:scale-105 transition-transform">
+                      <Camera size={12} className="text-black" />
                     </div>
-                    <span className="absolute bottom-1 right-2 w-4.5 h-4.5 bg-[#10B981] border-3 border-white rounded-full shadow-sm animate-pulse" />
+                    <span className="absolute bottom-1 right-2 w-3.5 h-3.5 bg-[#10B981] border-2 border-white rounded-full shadow-sm" />
                   </div>
 
                   {/* Nome do usuário e Idade abaixo da foto */}
-                  <div className="mt-3 flex items-center justify-center gap-1.5">
-                    <h3 className="text-2xl font-black font-display text-black tracking-tight">
+                  <div className="mt-2.5 flex items-center justify-center gap-1.5">
+                    <h3 className="text-xl font-black font-display text-black tracking-tight">
                       {profileForm.name || "Seu Nome"}
                     </h3>
-                    <span className="text-lg font-mono font-extrabold text-[#7C3AED]">
+                    <span className="text-base font-mono font-extrabold text-[#7C3AED]">
                       {profileForm.age || "25"}
                     </span>
                   </div>
 
                   {/* Pequeno Indicador Online Textual */}
-                  <p className="text-[10px] font-mono font-semibold text-[#10B981] uppercase tracking-wider mt-0.5 flex items-center justify-center gap-1">
-                    <span className="inline-block w-1.5 h-1.5 bg-[#10B981] rounded-full" />
+                  <p className="text-[9.5px] font-mono font-semibold text-[#10B981] uppercase tracking-wider mt-0.5 flex items-center justify-center gap-1">
+                    <span className="inline-block w-1.2 h-1.2 bg-[#10B981] rounded-full" />
                     Ativo agora na rede
                   </p>
 
                   {/* Botões de Ações Rápidas de Simulação */}
-                  <div className="flex gap-2 w-full mt-4 justify-center">
+                  <div className="flex gap-2 w-full mt-3 justify-center">
                     <button 
                       type="button"
                       onClick={() => {
                         setFriendsAddedCount(prev => prev + 1);
                         triggerActionAlert("Seu número de amigos foi atualizado localmente! Conexão ativa. 🤝💜");
                       }}
-                      className="flex-1 px-3 py-2 border-2 border-black rounded-xl bg-[#E2F0CB] hover:bg-[#D5EAA3] text-[#2d5218] transition-all font-black text-[11px] font-mono uppercase tracking-wider shadow-[2px_2px_0px_#000] active:translate-y-0.5 active:shadow-none"
+                      className="flex-1 px-2.5 py-1.5 border-2 border-black rounded-xl bg-[#E2F0CB] hover:bg-[#D5EAA3] text-[#2d5218] transition-all font-black text-[10px] font-mono uppercase tracking-wider shadow-[1.5px_1.5px_0px_#000] active:translate-y-0.5 active:shadow-none"
                     >
                       + Add Amigo
                     </button>
@@ -1346,7 +1343,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
                       onClick={() => {
                         triggerActionAlert("Seu perfil simulou a recepção de uma nova proposta de networking de outro criador! 📲");
                       }}
-                      className="flex-1 px-3 py-2 border-2 border-black rounded-xl bg-white hover:bg-neutral-50 text-black transition-all font-black text-[11px] font-mono uppercase tracking-wider shadow-[2px_2px_0px_#000] active:translate-y-0.5 active:shadow-none"
+                      className="flex-1 px-2.5 py-1.5 border-2 border-black rounded-xl bg-white hover:bg-neutral-50 text-black transition-all font-black text-[10px] font-mono uppercase tracking-wider shadow-[1.5px_1.5px_0px_#000] active:translate-y-0.5 active:shadow-none"
                     >
                       💬 Mensagem
                     </button>
@@ -1354,64 +1351,64 @@ export function InternalDashboard(props: InternalDashboardProps) {
                 </div>
 
                 {/* INDICADORES DO PERFIL */}
-                <div className="grid grid-cols-2 gap-2 border-t-2 border-b-2 border-dashed border-black/10 py-3 bg-[#FAF9F5] rounded-2xl px-2">
+                <div className="grid grid-cols-2 gap-2 border-t-2 border-b-2 border-dashed border-black/10 py-2 bg-[#FAF9F5] rounded-xl px-1.5">
                   <div className="text-center">
-                    <p className="text-xl font-black text-black font-display tracking-tight leading-none">
+                    <p className="text-lg font-black text-black font-display tracking-tight leading-none">
                       {friendsAddedCount}
                     </p>
-                    <p className="text-[10.5px] font-mono font-bold text-black/55 mt-1">amigos</p>
+                    <p className="text-[9.5px] font-mono font-bold text-black/55 mt-0.5">amigos</p>
                   </div>
                   <div className="text-center border-l-2 border-dashed border-black/10">
-                    <p className="text-xl font-black text-black font-display tracking-tight leading-none">
+                    <p className="text-lg font-black text-black font-display tracking-tight leading-none">
                       {profileViews.toLocaleString()}
                     </p>
-                    <p className="text-[10.5px] font-mono font-bold text-black/55 mt-1">visualizaram você</p>
+                    <p className="text-[9.5px] font-mono font-bold text-black/55 mt-0.5">visualizaram você</p>
                   </div>
                 </div>
 
                 {/* SEÇÃO BIO (Apenas deixa a bio, tira tags e emojis) */}
-                <div className="text-left bg-[#FCFCFA] p-3.5 border-2 border-black rounded-2xl">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-black/45 block mb-1">
+                <div className="text-left bg-[#FCFCFA] p-2.5 border-2 border-black rounded-xl">
+                  <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-black/45 block mb-0.5">
                     Biografia Autêntica
                   </span>
-                  <p className="text-xs text-black/80 font-semibold leading-relaxed italic break-words">
+                  <p className="text-[11.5px] text-black/80 font-semibold leading-relaxed italic break-words">
                     "{profileForm.bio || "Nenhuma biografia informada ainda."}"
                   </p>
                 </div>
 
                 {/* INFORMAÇÕES ADICIONAIS */}
-                <div className="text-left pt-3 border-t border-black/10 text-xs font-mono text-black/70 space-y-2">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-black/45 block">
+                <div className="text-left pt-2 border-t border-black/10 text-[11px] font-mono text-black/70 space-y-1.5">
+                  <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-black/45 block">
                     Informações de Conta
                   </span>
-                  <div className="grid grid-cols-2 gap-y-2 gap-x-1">
+                  <div className="grid grid-cols-2 gap-y-1 gap-x-1">
                     <div className="flex items-center gap-1.5 text-black">
-                      <span className="text-neutral-400">🎂</span>
+                      <span className="text-neutral-400 text-xs">🎂</span>
                       <span className="font-semibold">{profileForm.age} anos</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-black truncate" title={profileForm.location}>
-                      <span className="text-neutral-400">📍</span>
+                      <span className="text-neutral-400 text-xs">📍</span>
                       <span className="font-semibold truncate">{profileForm.location || "São Paulo, SP"}</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-black truncate" title={userProfession}>
-                      <span className="text-neutral-400">💼</span>
+                      <span className="text-neutral-400 text-xs">💼</span>
                       <span className="font-semibold truncate">{userProfession || "Parceiro"}</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-black">
-                      <span className="text-neutral-400">⏳</span>
+                      <span className="text-neutral-400 text-xs">⏳</span>
                       <span className="font-semibold">Entrou há 4 dias</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Botão de abrir edição ao final do card */}
-                <div className="pt-2">
+                <div className="pt-1.5">
                   <button
                     type="button"
                     onClick={() => setProfileActiveSubTab('edit')}
-                    className="w-full py-3 bg-[#B088F9] hover:bg-[#9965F7] border-2 border-black rounded-2xl text-[11px] font-black font-mono uppercase tracking-wider text-black shadow-[3px_3px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full py-2.5 bg-[#B088F9] hover:bg-[#9965F7] border-2 border-black rounded-xl text-[10px] font-black font-mono uppercase tracking-wider text-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Sliders size={13} />
+                    <Sliders size={12} />
                     <span>Gerenciar Fotos e Dados</span>
                   </button>
                 </div>
@@ -1421,23 +1418,23 @@ export function InternalDashboard(props: InternalDashboardProps) {
 
             {/* IF COMPONENT IS IN EDIT MODE (Card Completo de Edição) */}
             {profileActiveSubTab === 'edit' && (
-              <div className="bg-white border-4 border-black rounded-[36px] p-5 sm:p-6 shadow-[8px_8px_0px_rgba(0,0,0,1)] text-left flex flex-col gap-6 animate-in slide-in-from-bottom-2 duration-300">
+              <div className="bg-white border-3 border-black rounded-[24px] p-4.5 sm:p-5.5 shadow-[4px_4px_0px_rgba(0,0,0,1)] text-left flex flex-col gap-4 animate-in slide-in-from-bottom-2 duration-300">
                 
                 {/* Título de Edição com Botão de Voltar */}
-                <div className="border-b-2 border-black/10 pb-3 flex items-center justify-between gap-2">
+                <div className="border-b-2 border-black/10 pb-2.5 flex items-center justify-between gap-2">
                   <div>
-                    <h3 className="text-lg font-bold font-display flex items-center gap-1.5 text-black">
-                      <Sliders size={16} className="text-brand-purple" />
+                    <h3 className="text-base font-bold font-display flex items-center gap-1.5 text-black">
+                      <Sliders size={14} className="text-brand-purple" />
                       Gerenciar Fotos e Dados
                     </h3>
-                    <p className="text-[10px] text-text-muted mt-0.5 leading-tight font-mono">
+                    <p className="text-[9px] text-text-muted mt-0.5 leading-tight font-mono">
                       Portfólio de fotos reais e informações persistidas no Supabase.
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setProfileActiveSubTab('view')}
-                    className="px-2.5 py-1.5 bg-neutral-100 hover:bg-neutral-200 border-2 border-black rounded-xl text-[10px] font-bold font-mono text-black transition-all shadow-[1.5px_1.5px_0px_#000] flex items-center cursor-pointer shrink-0"
+                    className="px-2 py-1 bg-neutral-100 hover:bg-neutral-200 border-2 border-black rounded-lg text-[9px] font-bold font-mono text-black transition-all shadow-[1px_1px_0px_#000] flex items-center cursor-pointer shrink-0"
                   >
                     ← Voltar
                   </button>
@@ -1744,63 +1741,63 @@ export function InternalDashboard(props: InternalDashboardProps) {
       {/* ======================================================== */}
       {/* COORDENADAS DO RODAPÉ (DOCK E ÍCONES FIXOS DA ÁREA INTERNA - FIXADO EMBAIXO) */}
       {/* ======================================================== */}
-      <footer className="fixed bottom-0 left-0 right-0 z-[140] w-full bg-white border-t-4 border-black py-2.5 px-4 shadow-[0_-4px_12px_rgba(0,0,0,0.12)]">
-        <div className="max-w-md mx-auto flex items-center justify-around gap-1.5">
+      <footer className="fixed bottom-0 left-0 right-0 z-[140] w-full bg-white border-t-2 border-black py-1.5 px-3 shadow-[0_-2px_10px_rgba(0,0,0,0.08)]">
+        <div className="max-w-md mx-auto flex items-center justify-around gap-1">
           
           {/* ÍCONE MATCH FEED (CURTIDAS / DESCOBERTA) */}
           <button
             onClick={() => setActiveTab('feed')}
             className={cn(
-              "p-3 rounded-2xl transition-all relative group flex flex-col items-center gap-0.5",
-              activeTab === 'feed' ? "bg-brand-purple text-black border-2 border-black shadow-[2px_2px_0px_#000]" : "text-black hover:bg-black/5"
+              "p-1.5 rounded-xl transition-all relative group flex flex-col items-center",
+              activeTab === 'feed' ? "bg-brand-purple text-black border-2 border-black shadow-[1.5px_1.5px_0px_#000]" : "text-black hover:bg-black/5"
             )}
             title="Sindicato de Matches"
           >
-            <Compass className="w-6 h-6" />
-            <span className="text-[9px] font-bold font-mono">Matches</span>
+            <Compass className="w-5 h-5" />
+            <span className="text-[8px] font-bold font-mono">Matches</span>
           </button>
 
           {/* ÍCONE CHAT */}
           <button
             onClick={() => setActiveTab('chat')}
             className={cn(
-              "p-3 rounded-2xl transition-all relative group flex flex-col items-center gap-0.5",
-              activeTab === 'chat' ? "bg-brand-purple text-black border-2 border-black shadow-[2px_2px_0px_#000]" : "text-black hover:bg-black/5"
+              "p-1.5 rounded-xl transition-all relative group flex flex-col items-center",
+              activeTab === 'chat' ? "bg-brand-purple text-black border-2 border-black shadow-[1.5px_1.5px_0px_#000]" : "text-black hover:bg-black/5"
             )}
             title="Mensagens"
           >
-            <Compass className="w-6 h-6 invisible absolute" />
-            <MessageCircle className="w-6 h-6" />
+            <Compass className="w-5 h-5 invisible absolute" />
+            <MessageCircle className="w-5 h-5" />
             
             {/* Notificação Simulada Ponto Vermelho */}
-            <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-[#FFD166] border border-black rounded-full shadow-[1px_1px_0px_#000]" />
-            <span className="text-[9px] font-bold font-mono font-black">Chat</span>
+            <span className="absolute top-1 right-1 w-2 h-2 bg-[#FFD166] border border-black rounded-full shadow-[0.5px_0.5px_0px_#000]" />
+            <span className="text-[8px] font-bold font-mono">Chat</span>
           </button>
 
           {/* ÍCONE CURTIDAS (HISTÓRICO) */}
           <button
             onClick={() => setActiveTab('likes')}
             className={cn(
-              "p-3 rounded-2xl transition-all relative group flex flex-col items-center gap-0.5",
-              activeTab === 'likes' ? "bg-brand-purple text-black border-2 border-black shadow-[2px_2px_0px_#000]" : "text-black hover:bg-black/5"
+              "p-1.5 rounded-xl transition-all relative group flex flex-col items-center",
+              activeTab === 'likes' ? "bg-brand-purple text-black border-2 border-black shadow-[1.5px_1.5px_0px_#000]" : "text-black hover:bg-black/5"
             )}
             title="Curtidas e Comentários"
           >
-            <Heart className="w-6 h-6" fill={activeTab === 'likes' ? 'currentColor' : 'none'} />
-            <span className="text-[9px] font-bold font-mono font-black">Likes</span>
+            <Heart className="w-5 h-5" fill={activeTab === 'likes' ? 'currentColor' : 'none'} />
+            <span className="text-[8px] font-bold font-mono">Likes</span>
           </button>
 
           {/* ÍCONE MEU PERFIL */}
           <button
             onClick={() => setActiveTab('profile')}
             className={cn(
-              "p-3 rounded-2xl transition-all relative group flex flex-col items-center gap-0.5",
-              activeTab === 'profile' ? "bg-brand-purple text-black border-2 border-black shadow-[2px_2px_0px_#000]" : "text-black hover:bg-black/5"
+              "p-1.5 rounded-xl transition-all relative group flex flex-col items-center",
+              activeTab === 'profile' ? "bg-brand-purple text-black border-2 border-black shadow-[1.5px_1.5px_0px_#000]" : "text-black hover:bg-black/5"
             )}
             title="Meu Perfil"
           >
-            <UserIcon className="w-6 h-6" />
-            <span className="text-[9px] font-bold font-mono font-black">Perfil</span>
+            <UserIcon className="w-5 h-5" />
+            <span className="text-[8px] font-bold font-mono">Perfil</span>
           </button>
 
         </div>
