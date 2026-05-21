@@ -1,0 +1,89 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Plus Jakarta Sans", sans-serif;
+  
+  --color-brand-purple: #B088F9;
+  --color-brand-lilac: #D4C3F7;
+  --color-surface: #FFFFFF;
+  --color-card-dark: #191A23;
+  --color-card-purple: #B088F9;
+  --color-card-lilac: #F3F3F3;
+  --color-text-main: #000000;
+  --color-text-muted: #292A32;
+  
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-marquee: marquee 60s linear infinite;
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+}
+
+@layer base {
+  * {
+    @apply border-black/10;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-surface text-text-main antialiased selection:bg-brand-purple/30 overflow-x-hidden;
+    font-family: var(--font-sans);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply text-black;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(0.5deg); }
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes accordion-down {
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
+}
+
+@keyframes accordion-up {
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
+}
+
+.bg-dot-pattern {
+  background-image: radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.05) 1px, transparent 0);
+  background-size: 50px 50px;
+}
+
+.positivus-border {
+  @apply border border-black shadow-[0px_5px_0px_rgba(0,0,0,1)];
+}
+
+.positivus-card {
+  @apply border border-black rounded-[45px] p-10 transition-all duration-300;
+  box-shadow: 0px 5px 0px rgba(0,0,0,1);
+}
+
+.positivus-card:hover {
+  box-shadow: 0px 8px 0px rgba(0,0,0,1);
+  transform: translateY(-2px);
+}
+
+.badge-tag {
+  @apply px-2 py-0.5 rounded-md text-black font-medium text-lg inline-block whitespace-nowrap;
+}
+
+.text-stroke {
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.1);
+  color: transparent;
+}

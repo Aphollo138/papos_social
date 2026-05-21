@@ -1,0 +1,6 @@
+{
+  "name": "FollowWave - Crescimento Orgânico para Instagram",
+  "description": "Plataforma premium de crescimento social orgânico para Instagram, baseada em interações reais e seguras.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
