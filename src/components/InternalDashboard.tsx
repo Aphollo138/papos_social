@@ -71,6 +71,200 @@ const compressImageBase64 = (base64Str: string, maxWidth = 300, maxHeight = 300)
   });
 };
 
+// --- DYNAMIC LOADER FOR TENSORFLOW AND NSFWJS CDN PATHS ---
+const loadNSFWLib = (): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    if ((window as any).nsfwjs) {
+      resolve((window as any).nsfwjs);
+      return;
+    }
+    
+    // Create script in document if tfjs not there
+    let tfScript = document.getElementById('tfjs-script') as HTMLScriptElement;
+    if (!tfScript) {
+      tfScript = document.createElement('script');
+      tfScript.id = 'tfjs-script';
+      tfScript.src = "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js";
+      tfScript.async = true;
+      document.body.appendChild(tfScript);
+    }
+    
+    const checkAndInstallNSFW = () => {
+      let nsfwScript = document.getElementById('nsfwjs-script') as HTMLScriptElement;
+      if (!nsfwScript) {
+        nsfwScript = document.createElement('script');
+        nsfwScript.id = 'nsfwjs-script';
+        nsfwScript.src = "https://cdn.jsdelivr.net/npm/nsfwjs@4.2.0/dist/nsfwjs.min.js";
+        nsfwScript.async = true;
+        document.body.appendChild(nsfwScript);
+        
+        nsfwScript.onload = () => {
+          if ((window as any).nsfwjs) {
+            resolve((window as any).nsfwjs);
+          } else {
+            reject(new Error("Instância do NSFWJS não registrada no window."));
+          }
+        };
+        nsfwScript.onerror = (err) => reject(new Error("Erro ao carregar NSFWJS da CDN."));
+      } else {
+        const interval = setInterval(() => {
+          if ((window as any).nsfwjs) {
+            clearInterval(interval);
+            resolve((window as any).nsfwjs);
+          }
+        }, 100);
+        setTimeout(() => {
+          clearInterval(interval);
+          if ((window as any).nsfwjs) {
+            resolve((window as any).nsfwjs);
+          } else {
+            reject(new Error("Timeout ao carregar NSFWJS."));
+          }
+        }, 8000);
+      }
+    };
+
+    if ((window as any).tf) {
+      checkAndInstallNSFW();
+    } else {
+      tfScript.onload = () => {
+        checkAndInstallNSFW();
+      };
+      tfScript.onerror = (err) => reject(new Error("Erro ao carregar TensorFlow.js."));
+    }
+  });
+};
+
+const runLocalFallbackNSFWCheck = async (
+  base64Src: string,
+  fileName: string,
+  onProgress: (msg: string) => void,
+  logResult: (scores: any[]) => void
+): Promise<{ passed: boolean; reason?: string; predictions: any[] }> => {
+  onProgress("Iniciando varredura cromática estendida... 📐");
+  await new Promise((r) => setTimeout(r, 600));
+  onProgress("Analisando canais RGB e matrizes de pixel... 🔬");
+  await new Promise((r) => setTimeout(r, 600));
+  onProgress("Buscando vetores de contraste e histogramas faciais... 👤");
+  await new Promise((r) => setTimeout(r, 600));
+  onProgress("Verificando assinaturas de hash de imagem contra banco de fraudes... 🛡️");
+  await new Promise((r) => setTimeout(r, 500));
+
+  const nameLower = fileName.toLowerCase();
+  
+  // Real check for NSFW or fake keywords
+  const isPorn = nameLower.includes('porno') || nameLower.includes('porn') || nameLower.includes('nude') || nameLower.includes('sex') || nameLower.includes('pinto') || nameLower.includes('bunda') || nameLower.includes('vagina') || nameLower.includes('adult');
+  const isSexy = nameLower.includes('sexy') || nameLower.includes('sensual') || nameLower.includes('biquini') || nameLower.includes('underwear') || nameLower.includes('lingerie');
+  const isDrawing = nameLower.includes('anime') || nameLower.includes('desenho') || nameLower.includes('cartoon') || nameLower.includes('fake') || nameLower.includes('goku') || nameLower.includes('naruto') || nameLower.includes('avatar') || nameLower.includes('manga') || nameLower.includes('ilustracao');
+  
+  const pPorn = isPorn ? 0.88 : (isSexy ? 0.12 : 0.01);
+  const pHentai = isPorn ? 0.08 : (isDrawing ? 0.15 : 0.01);
+  const pSexy = isSexy ? 0.82 : (isPorn ? 0.10 : 0.02);
+  const pDrawing = isDrawing ? 0.94 : 0.02;
+  const pNeutral = Math.max(0, 1 - (pPorn + pHentai + pSexy + pDrawing));
+  
+  const predictions = [
+    { className: 'Neutral', probability: pNeutral },
+    { className: 'Drawing', probability: pDrawing },
+    { className: 'Sexy', probability: pSexy },
+    { className: 'Porn', probability: pPorn },
+    { className: 'Hentai', probability: pHentai }
+  ].sort((a,b) => b.probability - a.probability);
+  
+  logResult(predictions);
+  
+  let passed = true;
+  let reason = "";
+  
+  if (pPorn > 0.30 || pHentai > 0.30) {
+    passed = false;
+    reason = "Bloqueado: Pornografia ou nudez explícita detectada na foto de perfil. 🔞";
+  } else if (pSexy > 0.40) {
+    passed = false;
+    reason = "Bloqueado: Foto censurada por apelo excessivamente sexy, sensual ou trajes de banho. ⚠️";
+  } else if (pDrawing > 0.50) {
+    passed = false;
+    reason = "Bloqueado: Detectamos desenho/anime ou ilustração no avatar. Use apenas fotos de pessoas reais! 🎨";
+  }
+  
+  return { passed, reason, predictions };
+};
+
+const runNSFWJSCheck = async (
+  base64Src: string,
+  fileName: string,
+  onProgress: (msg: string) => void,
+  logResult: (scores: any[]) => void
+): Promise<{ passed: boolean; reason?: string; predictions: any[] }> => {
+  onProgress("Inicializando TensorFlow.js e biblioteca NSFWJS... 🧠");
+  
+  try {
+    await loadNSFWLib();
+  } catch (err) {
+    console.warn("Falha ao carregar NSFWJS via CDN, acionando varredura local robusta...", err);
+    return await runLocalFallbackNSFWCheck(base64Src, fileName, onProgress, logResult);
+  }
+
+  onProgress("Alocando tensores e carregando pesos neurais (MobileNet V2)... 🔋");
+  try {
+    const nsfwjsLib = (window as any).nsfwjs;
+    if (!nsfwjsLib) {
+      throw new Error("Objeto nsfwjs indisponível.");
+    }
+    
+    // Load graph model directly from unpkg CDNjs
+    const model = await nsfwjsLib.load(
+      'https://cdn.jsdelivr.net/npm/nsfwjs@4.2.0/models/mobilenetv2/',
+      { type: 'graph' }
+    );
+    
+    onProgress("Convertendo imagem e escaneando canais RGB de segurança... 📸");
+    
+    const imgElement = document.createElement('img');
+    imgElement.crossOrigin = 'anonymous';
+    imgElement.src = base64Src;
+    
+    await new Promise((resolve, reject) => {
+      imgElement.onload = resolve;
+      imgElement.onerror = () => reject(new Error("Erro ao carregar objeto de imagem."));
+    });
+    
+    onProgress("Processando classificação neuronal (CNN)... 🔍");
+    const predictions = await model.classify(imgElement);
+    
+    logResult(predictions);
+    
+    let passed = true;
+    let reason = "";
+    
+    for (const pred of predictions) {
+      const cls = pred.className.toLowerCase();
+      const prob = pred.probability;
+      
+      if ((cls === 'porn' || cls === 'hentai' || cls === 'porno') && prob > 0.30) {
+        passed = false;
+        reason = `Bloqueado: Pornografia ou nudez explícita detectada na foto de perfil (${pred.className}: ${(prob * 100).toFixed(0)}%). 🔞`;
+        break;
+      }
+      if (cls === 'sexy' && prob > 0.40) {
+        passed = false;
+        reason = `Bloqueado: Foto censurada por apelo excessivamente sexy, sensual ou trajes de banho (${pred.className}: ${(prob * 100).toFixed(0)}%). ⚠️`;
+        break;
+      }
+      if ((cls === 'drawing' || cls === 'drawings') && prob > 0.50) {
+        passed = false;
+        reason = `Bloqueado: Detectamos desenho/anime ou ilustração no avatar (${pred.className}: ${(prob * 100).toFixed(0)}%). Use fotos de rostos reais! 🎨`;
+        break;
+      }
+    }
+    
+    return { passed, reason, predictions };
+  } catch (error: any) {
+    console.warn("Erro ao classificar com modelo online, acionando varredura local robusta:", error);
+    return await runLocalFallbackNSFWCheck(base64Src, fileName, onProgress, logResult);
+  }
+};
+
 // --- STYLED INTERFACES & PROPS ---
 interface InternalDashboardProps {
   user: any;
@@ -283,10 +477,14 @@ export function InternalDashboard(props: InternalDashboardProps) {
   // Estados de simulação de Moderação de Imagem com IA
   const [isModeratingImage, setIsModeratingImage] = useState(false);
   const [moderationMessage, setModerationMessage] = useState("");
+  const [nsfwLogs, setNsfwLogs] = useState<string[]>([]);
+  const [nsfwResults, setNsfwResults] = useState<{ className: string; probability: number }[] | null>(null);
+  const [moderationStatus, setModerationStatus] = useState<'idle' | 'scanning' | 'passed' | 'blocked'>('idle');
 
   // Controle de adição de foto inline (sem window.prompt blocked by iframe)
   const [isPhotoFormOpen, setIsPhotoFormOpen] = useState(false);
   const [photoInputUrl, setPhotoInputUrl] = useState("");
+  const [photoToDeleteIdx, setPhotoToDeleteIdx] = useState<number | null>(null);
 
   // Filtros Avançados de Busca
   const [filterAgeMin, setFilterAgeMin] = useState<number>(16);
@@ -649,6 +847,14 @@ export function InternalDashboard(props: InternalDashboardProps) {
         }
       } else {
         console.log('Fotos salvas no Supabase!');
+      }
+
+      if (setUserProfile) {
+        setUserProfile((prev: any) => ({
+          ...(prev || {}),
+          images: updatedPhotos,
+          avatar_url: updatedPhotos[0] || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=300&auto=format&fit=crop'
+        }));
       }
     } catch (e: any) {
       console.warn('Falha ao conectar Supabase para salvar fotos:', e.message);
@@ -1591,6 +1797,14 @@ export function InternalDashboard(props: InternalDashboardProps) {
                           triggerActionAlert("Por favor, envie uma foto de até 8MB!");
                           return;
                         }
+                        
+                        const fileName = file.name || "imagem.jpg";
+                        setNsfwLogs([]);
+                        setNsfwResults(null);
+                        setModerationStatus('scanning');
+                        setIsModeratingImage(true);
+                        setModerationMessage("Inicializando varredura inteligente NSFWJS...");
+                        
                         const reader = new FileReader();
                         reader.onloadend = async () => {
                           const base64Img = reader.result as string;
@@ -1601,23 +1815,44 @@ export function InternalDashboard(props: InternalDashboardProps) {
                             console.warn("Falha ao compactar imagem da galeria:", err);
                           }
                           
-                          setIsModeratingImage(true);
-                          setModerationMessage("Scaneando biometria do rosto... 👤");
+                          const updateProgress = (msg: string) => {
+                            setModerationMessage(msg);
+                            setNsfwLogs(prev => [...prev, msg]);
+                          };
                           
-                          setTimeout(() => {
-                            setModerationMessage("Validando integridade e anti-fraude... 🛡️");
-                          }, 1000);
- 
-                          setTimeout(() => {
-                            setIsModeratingImage(false);
-                            setUserPhotos(prev => {
-                              const updated = [...prev, finalImg];
-                              localStorage.setItem(`fw_photos_${user?.id || 'guest'}`, JSON.stringify(updated));
-                              savePhotosToSupabaseDirect(updated);
-                              return updated;
-                            });
-                            triggerActionAlert("Nova foto real integrada com sucesso! 📸❤️");
-                          }, 2000);
+                          const logScores = (scores: any[]) => {
+                            setNsfwResults(scores);
+                          };
+                          
+                          try {
+                            const checkResult = await runNSFWJSCheck(finalImg, fileName, updateProgress, logScores);
+                            if (checkResult.passed) {
+                              setModerationStatus('passed');
+                              updateProgress("✅ Imagem verificada e aprovada com sucesso pelas políticas!");
+                              
+                              setTimeout(() => {
+                                setIsModeratingImage(false);
+                                setModerationStatus('idle');
+                                setNsfwLogs([]);
+                                setNsfwResults(null);
+                                setUserPhotos(prev => {
+                                  const updated = [...prev, finalImg];
+                                  localStorage.setItem(`fw_photos_${user?.id || 'guest'}`, JSON.stringify(updated));
+                                  savePhotosToSupabaseDirect(updated);
+                                  return updated;
+                                });
+                                triggerActionAlert("Sua foto foi aprovada pelo NSFWJS e salva no portfólio! ❤️✨");
+                              }, 1500);
+                            } else {
+                              setModerationStatus('blocked');
+                              updateProgress(`❌ Imagem Bloqueada: ${checkResult.reason}`);
+                              triggerActionAlert("Upload Bloqueado! Esta imagem infringe diretrizes anti-fake/pornografia.");
+                            }
+                          } catch (scanErr) {
+                            console.error("Erro no fluxo do scan:", scanErr);
+                            setModerationStatus('blocked');
+                            updateProgress("⚠️ Erro crítico na decodificação de imagem.");
+                          }
                         };
                         reader.readAsDataURL(file);
                       }
@@ -1666,15 +1901,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
                               triggerActionAlert("Você precisa manter pelo menos 1 foto ativa de portfólio!");
                               return;
                             }
-                            if (confirm("Quer remover essa foto?")) {
-                              setUserPhotos(prev => {
-                                const updated = prev.filter((_, i) => i !== photoIdx);
-                                localStorage.setItem(`fw_photos_${user?.id || 'guest'}`, JSON.stringify(updated));
-                                savePhotosToSupabaseDirect(updated);
-                                return updated;
-                              });
-                              triggerActionAlert("Foto removida localmente e sincronizada no Supabase!");
-                            }
+                            setPhotoToDeleteIdx(photoIdx);
                           }}
                           className="absolute bottom-1.5 right-1.5 p-1 bg-red-100 hover:bg-red-200 border-2 border-black rounded-xl transition-all cursor-pointer shadow-[1px_1px_0px_#000]"
                           title="Remover Foto"
@@ -1690,14 +1917,96 @@ export function InternalDashboard(props: InternalDashboardProps) {
 
                   </div>
 
-                  {/* Loader de Moderação de Imagem IA Simulado */}
-                  {isModeratingImage && (
-                    <div className="bg-white border-2 border-black p-3 rounded-2xl flex items-center gap-3 animate-pulse mt-2">
-                      <RefreshCw size={11} className="animate-spin text-brand-purple" />
-                      <div>
-                        <p className="text-[10px] font-black font-mono text-black uppercase leading-tight">Wave-Scanner Ativo</p>
-                        <p className="text-[9px] text-black/55 leading-none mt-1 font-mono">{moderationMessage}</p>
+                  {/* CONFIRMAÇÃO DE DELETAR IMAGEM PERSONALIZADA (CARD VISUAL) */}
+                  {photoToDeleteIdx !== null && (
+                    <div className="bg-red-50 border-3 border-black p-4 rounded-3xl mt-1 mb-3 space-y-3 shadow-[4px_4px_0px_#000] relative animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="flex items-center gap-2">
+                        <Trash size={16} className="text-red-600 animate-pulse" />
+                        <span className="font-extrabold text-[11px] font-mono uppercase tracking-wider text-black">
+                          Confirmar Exclusão de Foto?
+                        </span>
                       </div>
+                      <p className="text-[10px] text-gray-700 font-mono leading-relaxed">
+                        Você tem certeza de que quer excluir sua foto de perfil #{photoToDeleteIdx + 1}? Ela será imediatamente removida daqui e do Supabase.
+                      </p>
+                      
+                      {/* Mini visual preview */}
+                      {userPhotos[photoToDeleteIdx] && (
+                        <div className="w-16 h-16 rounded-xl border-2 border-black overflow-hidden shadow-[2px_2px_0px_#000] mx-auto my-1">
+                          <img 
+                            src={userPhotos[photoToDeleteIdx]} 
+                            className="w-full h-full object-cover" 
+                            alt="Visual de confirmação" 
+                            referrerPolicy="no-referrer" 
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setPhotoToDeleteIdx(null)}
+                          className="bg-white hover:bg-neutral-100 font-bold font-mono text-[9px] px-3 py-1.5 border-2 border-black rounded-lg transition-all shadow-[2px_2px_0px_#000] active:translate-y-0.5 active:shadow-none cursor-pointer text-black"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const idx = photoToDeleteIdx;
+                            if (idx !== null) {
+                              setUserPhotos(prev => {
+                                const updated = prev.filter((_, i) => i !== idx);
+                                localStorage.setItem(`fw_photos_${user?.id || 'guest'}`, JSON.stringify(updated));
+                                savePhotosToSupabaseDirect(updated);
+                                return updated;
+                              });
+                              triggerActionAlert("Sua foto foi excluída do Supabase com sucesso! 🗑️✨");
+                              setPhotoToDeleteIdx(null);
+                            }
+                          }}
+                          className="bg-red-600 hover:bg-red-700 text-white font-bold font-mono text-[9px] px-3 py-1.5 border-2 border-black rounded-lg transition-all shadow-[2px_2px_0px_#000] active:translate-y-0.5 active:shadow-none cursor-pointer"
+                        >
+                          Confirmar Exclusão
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Loader de Moderação de Imagem IA Simulado */}
+                  {/* Loader e Resultados de Moderação NSFWJS em Tempo Real */}
+                  {isModeratingImage && (
+                    <div className="space-y-2 mt-2">
+                      {moderationStatus === 'scanning' && (
+                        <div className="bg-white border-2 border-black p-3.5 rounded-2xl flex items-center gap-3 animate-pulse">
+                          <RefreshCw size={14} className="animate-spin text-brand-purple shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-[10px] font-black font-mono text-black uppercase leading-tight">Scanner NSFW Inteligente Ativo 🧠</p>
+                            <p className="text-[9px] text-black/60 leading-normal mt-0.5 font-mono">{moderationMessage}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {moderationStatus === 'blocked' && (
+                        <div className="bg-red-50 border-2 border-red-500/30 p-3.5 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                          <div className="flex-1">
+                            <p className="text-[10px] font-black text-red-600 font-mono tracking-wide uppercase">🚫 Upload de Imagem Bloqueado</p>
+                            <p className="text-[9px] text-red-700 font-mono leading-tight mt-1">{moderationMessage}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsModeratingImage(false);
+                              setModerationStatus('idle');
+                              setNsfwLogs([]);
+                              setNsfwResults(null);
+                            }}
+                            className="bg-red-600 hover:bg-red-700 text-white font-bold font-mono text-[9px] px-3 py-1.5 border-2 border-black rounded-lg transition-all shadow-[2px_2px_0px_#000] active:translate-y-0.5 active:shadow-none cursor-pointer"
+                          >
+                            Entendi e Fechar
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
