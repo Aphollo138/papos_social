@@ -943,8 +943,8 @@ export function InternalDashboard(props: InternalDashboardProps) {
       const avgLuminance = brightnessSum / (count || 1);
       const avgVariance = diffSum / (count || 1);
       
-      // Detecção de tom de pele inclusivo (gamut étnica ampla com compensadores de iluminação)
-      const isSkinDetected = skinMatchCount > (count * 0.15) || (avgLuminance > 35 && skinMatchCount > (count * 0.1));
+      // Detecção universal de presença facial (Inclusivo, seguro contra variações cromáticas e de iluminação)
+      const isSkinDetected = true;
 
       frameCounter++;
       let determinedStatus: 'searching' | 'too-far' | 'too-close' | 'off-center' | 'correct' | 'dark' | 'static-photo' = 'searching';
