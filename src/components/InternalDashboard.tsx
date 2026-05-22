@@ -967,10 +967,18 @@ export function InternalDashboard(props: InternalDashboardProps) {
   };
 
   return (
-    <div className="bg-[#FAF9F5] min-h-screen pb-14 pt-1 px-1.5 sm:px-4 max-w-xl mx-auto relative antialiased text-black">
+    <div className={cn(
+      "bg-[#FAF9F5] relative antialiased text-black transition-all",
+      activeTab === 'chat'
+        ? "w-full max-w-4xl mx-auto px-0 md:px-4 h-screen overflow-hidden pb-[60px]"
+        : "min-h-screen pb-14 pt-1 px-1.5 sm:px-4 max-w-xl mx-auto"
+    )}>
       
       {/* HEADER DA ÁREA INTERNA - ESTILO COMPACTO SEM BORDAS */}
-      <div className="flex items-center justify-between w-full py-2 px-1 mb-3 bg-[#FAF9F5]/90 backdrop-blur-md sticky top-0 z-[110]">
+      <div className={cn(
+        "flex items-center justify-between w-full py-2 px-1 mb-3 bg-[#FAF9F5]/90 backdrop-blur-md sticky top-0 z-[110]",
+        activeTab === 'chat' && "hidden md:flex"
+      )}>
         <div className="flex items-center gap-2">
           <div>
             <span className="text-xl font-display font-black tracking-tight text-black block leading-none">
@@ -1413,7 +1421,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
         {/* TELA DE CHAT: CONVERSAS COM OS ANFITRIÕES DO INSTAGRAM */}
         {/* ======================================================== */}
         {activeTab === 'chat' && (
-          <div className="bg-[#FAF9F5] border-4 border-black rounded-[32px] shadow-[6px_6px_0px_#000] overflow-hidden grid grid-cols-1 md:grid-cols-3 max-w-4xl mx-auto h-[calc(100vh-145px)] min-h-[470px] max-h-[650px]">
+          <div className="bg-[#FAF9F5] md:border-4 md:border-black md:rounded-[32px] md:shadow-[6px_6px_0px_#000] overflow-hidden grid grid-cols-1 md:grid-cols-3 max-w-4xl mx-auto w-full h-[calc(100vh-62px)] md:h-[calc(100vh-145px)] md:min-h-[470px] md:max-h-[650px] border-b border-black/10">
             
             {/* LADO ESQUERDO: LISTA DE PARCEIROS E CONVERSAS NO ESTILO DE SCREEN DO CELULAR (Esconde no celular se houver chat ativo) */}
             <div className={cn(
