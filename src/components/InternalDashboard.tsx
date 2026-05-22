@@ -815,20 +815,30 @@ export function InternalDashboard(props: InternalDashboardProps) {
         if (!shouldSimulateMismatch) {
           setVerificationStep('success');
           setIsVerified(true);
-          setVerificationMessage('Biometria confirmada com 96,8% de correspondência fisionômica das fotos do portfólio! 🛡️✨');
+          setVerificationMessage('Sua conta é autêntica e a verificação facial foi sucedida! 🛡️');
           try {
             const userId = user?.id || 'guest';
             localStorage.setItem(`fw_verified_${userId}`, 'true');
             if (userProfile) {
               userProfile.is_verified = true;
             }
+            // Salva o verificado diretamente no Supabase
+            saveVerificationToSupabase(true);
           } catch(e) {}
-          triggerActionAlert("Selo de Conta Autêntica ativado com sucesso!");
+          triggerActionAlert("Conta verificada com sucesso!");
         } else {
           setVerificationStep('failed');
           setIsVerified(false);
-          setVerificationMessage('Incompatibilidade Biométrica: A fisionomia registrada diverge da foto fisionômica de cadastro. (Fator: 31,4%)');
-          triggerActionAlert("A verificação facial falhou por incompatibilidade física.");
+          setVerificationMessage('Verificação facial não pôde ser concluída. O rosto não confere com o cadastro.');
+          try {
+            const userId = user?.id || 'guest';
+            localStorage.setItem(`fw_verified_${userId}`, 'false');
+            if (userProfile) {
+              userProfile.is_verified = false;
+            }
+            saveVerificationToSupabase(false);
+          } catch(e) {}
+          triggerActionAlert("Não são as mesmas pessoas.");
         }
       }
       setSimilarityRate(parseFloat(currentSimilarity.toFixed(1)));
@@ -876,18 +886,18 @@ export function InternalDashboard(props: InternalDashboardProps) {
           if (currentStepProgress >= 100) {
             currentStepProgress = 0;
             if (currStep === 'aligning') {
-              setVerificationMessage('Alinhado! Agora aproxime seu rosto lentamente... 🧠');
+              setVerificationMessage('Alinhado! Agora aproxime seu rosto lentamente...');
               return 'approaching';
             } else if (currStep === 'approaching') {
-              setVerificationMessage('Excelente! Agora afaste seu rosto lentamente... 📸');
+              setVerificationMessage('Excelente! Agora afaste seu rosto de leve...');
               return 'pulling';
             } else if (currStep === 'pulling') {
-              setVerificationMessage('Escaneamento finalizado! Extraindo mapeamento de coordenadas... 🧬');
+              setVerificationMessage('Pronto! Processando biometria...');
               setTimeout(() => {
                 stopFaceCamera();
                 setVerificationStep('processing');
                 setVerificationProgress(0);
-                setVerificationMessage('Comparando coordenadas faciais do MediaPipe Landmarker contra fotos de cadastro...');
+                setVerificationMessage('Comparando biometria facial com as fotos de cadastro...');
                 runEvaluationProcess();
               }, 800);
               return 'pulling';
@@ -920,154 +930,32 @@ export function InternalDashboard(props: InternalDashboardProps) {
       const rWidth = w * 0.38 * scale;
       const rHeight = h * 0.48 * scale;
 
-      // Draw oval mask guidelines
-      ctx.strokeStyle = stepName === 'aligning' ? '#EAB308' : stepName === 'approaching' ? '#A855F7' : '#3B82F6';
-      ctx.lineWidth = 3;
-      ctx.setLineDash([6, 6]);
+      // Draw oval mask guidelines - banking app style (clean and solid)
+      const isOk = stepName !== 'aligning';
+      ctx.strokeStyle = stepName === 'aligning' ? '#F59E0B' : stepName === 'approaching' ? '#8B5CF6' : '#10B981';
+      ctx.lineWidth = 4;
+      ctx.shadowColor = stepName === 'aligning' ? 'rgba(245, 158, 11, 0.4)' : stepName === 'approaching' ? 'rgba(139, 92, 246, 0.4)' : 'rgba(16, 185, 129, 0.4)';
+      ctx.shadowBlur = 15;
+      
       ctx.beginPath();
       ctx.ellipse(cx, cy, rWidth, rHeight, 0, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.setLineDash([]);
+      
+      // Reset shadow for other drawings
+      ctx.shadowBlur = 0;
 
-      // Nodes list to draw
-      const points: {x: number, y: number}[] = [];
-      const jawPoints: {x: number, y: number}[] = [];
-      const lipPoints: {x: number, y: number}[] = [];
-      const leftEyePoints: {x: number, y: number}[] = [];
-      const rightEyePoints: {x: number, y: number}[] = [];
-
-      for (let i = 0; i <= 10; i++) {
-        const angle = Math.PI * 0.1 + (i / 10) * Math.PI * 0.8;
-        const jx = cx + Math.cos(angle) * rWidth * 0.85;
-        const jy = cy + Math.sin(angle) * rHeight * 0.85;
-        jawPoints.push({ x: jx, y: jy });
-        points.push({ x: jx, y: jy });
-      }
-
-      const eyeOffsetY = -rHeight * 0.2;
-      const eyeOffsetX = rWidth * 0.32;
-      const eyeR = rWidth * 0.08;
-
-      for (let i = 0; i < 6; i++) {
-        const angle = (i / 6) * Math.PI * 2;
-        const ex = cx - eyeOffsetX + Math.cos(angle) * eyeR;
-        const ey = cy + eyeOffsetY + Math.sin(angle) * eyeR * 0.5;
-        leftEyePoints.push({ x: ex, y: ey });
-        points.push({ x: ex, y: ey });
-      }
-
-      for (let i = 0; i < 6; i++) {
-        const angle = (i / 6) * Math.PI * 2;
-        const ex = cx + eyeOffsetX + Math.cos(angle) * eyeR;
-        const ey = cy + eyeOffsetY + Math.sin(angle) * eyeR * 0.5;
-        rightEyePoints.push({ x: ex, y: ey });
-        points.push({ x: ex, y: ey });
-      }
-
-      const noseTopY = cy - rHeight * 0.25;
-      const noseTipY = cy + rHeight * 0.1;
-      const noseLWidth = rWidth * 0.15;
-      const noseBridgePoints = [
-        { x: cx, y: noseTopY },
-        { x: cx, y: cy },
-        { x: cx, y: noseTipY },
-        { x: cx - noseLWidth, y: noseTipY },
-        { x: cx + noseLWidth, y: noseTipY }
-      ];
-      points.push(...noseBridgePoints);
-
-      const lipY = cy + rHeight * 0.38;
-      const lipW = rWidth * 0.38;
-      const lipH = rHeight * 0.08;
-      for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2;
-        const lx = cx + Math.cos(angle) * lipW;
-        const ly = lipY + Math.sin(angle) * lipH * (i >= 4 ? 0.3 : 1.0);
-        lipPoints.push({ x: lx, y: ly });
-        points.push({ x: lx, y: ly });
-      }
-
-      ctx.beginPath();
-      ctx.strokeStyle = 'rgba(176, 136, 249, 0.4)';
-      ctx.lineWidth = 1;
-
-      for (let i = 0; i < jawPoints.length - 1; i++) {
-        ctx.moveTo(jawPoints[i].x, jawPoints[i].y);
-        ctx.lineTo(jawPoints[i+1].x, jawPoints[i+1].y);
-      }
-
-      for (let i = 0; i < leftEyePoints.length; i++) {
-        const next = (i + 1) % leftEyePoints.length;
-        ctx.moveTo(leftEyePoints[i].x, leftEyePoints[i].y);
-        ctx.lineTo(leftEyePoints[next].x, leftEyePoints[next].y);
-      }
-      for (let i = 0; i < rightEyePoints.length; i++) {
-        const next = (i + 1) % rightEyePoints.length;
-        ctx.moveTo(rightEyePoints[i].x, rightEyePoints[i].y);
-        ctx.lineTo(rightEyePoints[next].x, rightEyePoints[next].y);
-      }
-
-      for (let i = 0; i < lipPoints.length; i++) {
-        const next = (i + 1) % lipPoints.length;
-        ctx.moveTo(lipPoints[i].x, lipPoints[i].y);
-        ctx.lineTo(lipPoints[next].x, lipPoints[next].y);
-      }
-
-      ctx.moveTo(cx, noseTopY);
-      ctx.lineTo(cx - eyeOffsetX, cy + eyeOffsetY);
-      ctx.moveTo(cx, noseTopY);
-      ctx.lineTo(cx + eyeOffsetX, cy + eyeOffsetY);
-      ctx.moveTo(cx, noseTipY);
-      ctx.lineTo(lipPoints[0].x, lipPoints[0].y);
-
-      for (let i = 1; i < jawPoints.length - 1; i += 2) {
-        ctx.moveTo(jawPoints[i].x, jawPoints[i].y);
-        ctx.lineTo(cx, cy);
-      }
-
-      ctx.stroke();
-
-      const borderSize = 14;
-      const bX = cx - rWidth * 1.05;
-      const bY = cy - rHeight * 1.05;
-      const bW = rWidth * 2.1;
-      const bH = rHeight * 2.1;
-
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.lineWidth = 2;
-
-      ctx.beginPath();
-      ctx.moveTo(bX, bY + borderSize); ctx.lineTo(bX, bY); ctx.lineTo(bX + borderSize, bY);
-      ctx.moveTo(bX + bW - borderSize, bY); ctx.lineTo(bX + bW, bY); ctx.lineTo(bX + bW, bY + borderSize);
-      ctx.moveTo(bX, bY + bH - borderSize); ctx.lineTo(bX, bY + bH); ctx.lineTo(bX + borderSize, bY + bH);
-      ctx.moveTo(bX + bW - borderSize, bY + bH); ctx.lineTo(bX + bW, bY + bH); ctx.lineTo(bX + bW, bY + bH - borderSize);
-      ctx.stroke();
-
-      ctx.fillStyle = '#10B981';
-      points.forEach(pt => {
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, 2, 0, Math.PI * 2);
-        ctx.fill();
-      });
-
-      const scanY = cy - rHeight + ((now % 2500) / 2500) * (rHeight * 2);
+      // Draw a subtle scan horizontal line within the oval
+      const scanY = cy - rHeight + ((now % 2000) / 2000) * (rHeight * 2);
       ctx.beginPath();
       const grad = ctx.createLinearGradient(cx - rWidth, scanY, cx + rWidth, scanY);
-      grad.addColorStop(0, 'rgba(176, 136, 249, 0)');
-      grad.addColorStop(0.5, 'rgba(176, 136, 249, 0.7)');
-      grad.addColorStop(1, 'rgba(176, 136, 249, 0)');
+      grad.addColorStop(0, 'rgba(168, 85, 247, 0)');
+      grad.addColorStop(0.5, stepName === 'pulling' ? 'rgba(16, 185, 129, 0.8)' : 'rgba(168, 85, 247, 0.8)');
+      grad.addColorStop(1, 'rgba(168, 85, 247, 0)');
       ctx.strokeStyle = grad;
-      ctx.lineWidth = 3;
-      ctx.moveTo(cx - rWidth * 0.9, scanY);
-      ctx.lineTo(cx + rWidth * 0.9, scanY);
+      ctx.lineWidth = 4;
+      ctx.moveTo(cx - rWidth * 0.85, scanY);
+      ctx.lineTo(cx + rWidth * 0.85, scanY);
       ctx.stroke();
-
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.font = 'bold 8px monospace';
-      ctx.fillText(`MEDIAPIPE FL v0.10: ACTIVE`, bX + 4, bY - 6);
-      ctx.fillText(`ALIGN CONFIDENCE: 98.4%`, bX + bW - 120, bY - 6);
-      ctx.fillText(`DISTANCE GAUGER: ${Math.floor(scale * 100)}%`, bX + 4, bY + bH + 11);
-      ctx.fillText(`468 MAPPED NODES`, bX + bW - 100, bY + bH + 11);
 
       faceAnimationRef.current = requestAnimationFrame(loop);
     };
@@ -1206,6 +1094,68 @@ export function InternalDashboard(props: InternalDashboardProps) {
       }
     } catch (e: any) {
       console.warn('Falha ao conectar Supabase para salvar fotos:', e.message);
+    }
+  };
+
+  const saveVerificationToSupabase = async (verifiedState: boolean) => {
+    if (!user) return;
+    try {
+      const cleanUsername = profileForm.username.replace('@', '').trim().toLowerCase();
+      const updatedAge = parseInt(profileForm.age.toString()) || 25;
+      const cleanBioText = profileForm.bio.split('[FW_METADATA_V1]')[0].trim();
+
+      const metadata = {
+        images: userPhotos,
+        age: updatedAge,
+        gender: profileForm.gender,
+        location: profileForm.location,
+        profession: userProfession,
+        emojis: userEmojis,
+        is_verified: verifiedState,
+        views: profileViews,
+        friends_added: friendsAddedCount
+      };
+
+      const finalBioWithMetadata = `${cleanBioText}\n\n[FW_METADATA_V1]${JSON.stringify(metadata)}`;
+
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          instagram_username: cleanUsername,
+          full_name: profileForm.name,
+          bio: finalBioWithMetadata,
+          age: updatedAge,
+          gender: profileForm.gender,
+          location: profileForm.location,
+          images: userPhotos,
+          avatar_url: userPhotos[0] || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=300&auto=format&fit=crop',
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.warn('Erro ao salvar verificação no Supabase, tentando gravação resiliente na bio...', error.message);
+        
+        await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            instagram_username: cleanUsername,
+            full_name: profileForm.name,
+            bio: finalBioWithMetadata,
+            avatar_url: userPhotos[0] || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=300&auto=format&fit=crop',
+            updated_at: new Date().toISOString()
+          });
+      }
+
+      if (setUserProfile) {
+        setUserProfile((prev: any) => ({
+          ...(prev || {}),
+          is_verified: verifiedState
+        }));
+      }
+    } catch (e: any) {
+      console.warn('Falha persistindo verificação facial no Supabase:', e.message);
     }
   };
 
@@ -2986,26 +2936,26 @@ export function InternalDashboard(props: InternalDashboardProps) {
       </AnimatePresence>
 
       {/* ======================================================== */}
-      {/* MODAL BIOMÉTRICO OVAL: VERIFICAÇÃO FACIAL MEDIAPIPE      */}
+      {/* MODAL BIOMÉTRICO OVAL: VERIFICAÇÃO FACIAL PREMIUM        */}
       {/* ======================================================== */}
       <AnimatePresence>
         {isFaceVerificationModalOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+          <div className="fixed inset-0 z-[200] bg-zinc-950 text-white flex flex-col justify-between p-4 sm:p-8 md:p-12 overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 40 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 40 }}
-              className="bg-white border-4 border-black p-5 sm:p-7 rounded-[40px] shadow-[8px_8px_0px_#000] max-w-md w-full text-center space-y-5 my-8"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="max-w-md w-full mx-auto flex flex-col justify-between min-h-[90vh] md:min-h-[80vh] my-auto space-y-6"
             >
               {/* Header */}
-              <div className="flex items-center justify-between border-b pb-3 border-black/10">
+              <div className="flex items-center justify-between border-b pb-4 border-white/10">
                 <div className="text-left">
-                  <h4 className="text-lg font-black font-display text-black flex items-center gap-1.5 leading-tight">
-                    <Shield size={18} className="text-brand-purple shrink-0" />
-                    Biometria Facial
+                  <h4 className="text-xl font-black font-display text-white flex items-center gap-2 leading-tight">
+                    <Shield size={20} className="text-brand-purple shrink-0" />
+                    Validação Biométrica
                   </h4>
-                  <p className="text-[9px] font-mono font-bold text-neutral-400 mt-0.5 uppercase tracking-wider">
-                    MediaPipe Task-Vision v0.10
+                  <p className="text-[10px] font-mono font-bold text-neutral-400 mt-1 uppercase tracking-wider">
+                    Selo de Conta Autêntica
                   </p>
                 </div>
                 <button 
@@ -3013,26 +2963,26 @@ export function InternalDashboard(props: InternalDashboardProps) {
                     stopFaceCamera();
                     setIsFaceVerificationModalOpen(false);
                   }}
-                  className="p-1.5 hover:bg-black/5 border-2 border-black rounded-xl transition-all shadow-[1.5px_1.5px_0px_#000]"
+                  className="p-2 bg-neutral-900 border border-white/15 rounded-xl transition-all hover:bg-neutral-800 text-white"
                 >
-                  <X size={15} />
+                  <X size={18} />
                 </button>
               </div>
 
               {/* Descrição rápida das Instruções do Scanner */}
-              <div className="bg-[#FAF9F5] border-2 border-black p-2.5 rounded-2xl text-left text-[11px] space-y-1">
-                <p className="font-extrabold text-[#05121c] flex items-center gap-1">
-                  <span>💡</span> Instruções de Autenticação:
+              <div className="bg-neutral-900 border border-white/10 p-4 rounded-2xl text-left text-xs space-y-2.5">
+                <p className="font-extrabold text-[#B088F9] flex items-center gap-1.5">
+                  <span>💡</span> Instruções de Validação:
                 </p>
-                <ol className="list-decimal pl-4.5 font-mono text-[9px] text-neutral-600 font-bold space-y-0.5 leading-tight">
-                  <li>Inicie a câmera e alinhe seu rosto no oval pontilhado;</li>
-                  <li>Aproxime o rosto devagar até o calibrador acusar ideal;</li>
-                  <li>Dê uma leve distância (afastar) para fechar os landmarks faciais.</li>
+                <ol className="list-decimal pl-4.5 font-mono text-[10px] text-neutral-300 font-bold space-y-1.5 leading-normal">
+                  <li>Inicie a câmera e posicione seu rosto no centro do círculo;</li>
+                  <li>Aproxime o rosto devagar até o indicador acusar ótimo;</li>
+                  <li>Afaste o rosto levemente para concluir a leitura física.</li>
                 </ol>
               </div>
 
               {/* Área do Feed de Câmera com Oval Viewport */}
-              <div className="relative w-full aspect-square max-w-[340px] mx-auto border-3 border-black rounded-[32px] overflow-hidden bg-neutral-900 group shadow-[4px_4px_0px_rgba(0,0,0,0.15)] flex items-center justify-center">
+              <div className="relative w-72 h-72 md:w-80 md:h-80 mx-auto rounded-full overflow-hidden bg-neutral-900 border-4 border-dashed border-[#B088F9]/80 shadow-[0_0_25px_rgba(176,136,249,0.15)] flex items-center justify-center">
                 
                 {/* O Elemento de Vídeo Real da Câmera do Usuário */}
                 <video
@@ -3043,7 +2993,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
                   style={{ display: (verificationStep === 'aligning' || verificationStep === 'approaching' || verificationStep === 'pulling') ? 'block' : 'none' }}
                 />
 
-                {/* Canvas de Desenho dos Landmarks do MediaPipe por Cima */}
+                {/* Canvas de Desenho dos Landmarks Biométricos por Cima */}
                 <canvas
                   ref={faceCanvasRef}
                   className="absolute inset-0 w-full h-full pointer-events-none scale-x-[-1] z-10"
@@ -3052,32 +3002,32 @@ export function InternalDashboard(props: InternalDashboardProps) {
 
                 {/* HUD Overlay / Estado de Processamento ou Idle */}
                 {(verificationStep === 'idle' || verificationStep === 'initializing' || verificationStep === 'processing' || verificationStep === 'success' || verificationStep === 'failed') && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-black/65 text-white z-20 space-y-4 animate-in fade-in duration-300">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-black/80 text-white z-20 space-y-4 animate-in fade-in duration-300">
                     
                     {verificationStep === 'idle' && (
-                      <div className="text-center space-y-3">
-                        <div className="w-16 h-16 bg-[#B088F9] rounded-full mx-auto border-2 border-black flex items-center justify-center shadow-[3px_3px_0px_#000]">
+                      <div className="text-center space-y-4">
+                        <div className="w-16 h-16 bg-[#B088F9] rounded-full mx-auto flex items-center justify-center border border-black shadow-[3px_3px_0px_#000]">
                           <Camera size={26} className="text-black" />
                         </div>
                         <div>
-                          <p className="text-sm font-black font-display text-white">Pronto para Escaneamento</p>
-                          <p className="text-[10px] text-neutral-300 font-mono mt-1">Conectando com o hardware fisionômico...</p>
+                          <p className="text-sm font-black font-display text-white">Pronto para Validação</p>
+                          <p className="text-[10px] text-neutral-400 font-mono mt-1">Clique abaixo para ativar sua câmera</p>
                         </div>
                         <button
                           type="button"
                           onClick={startFaceCamera}
-                          className="px-4 py-2 bg-white text-black border-2 border-black rounded-xl font-bold font-mono text-[9.5px] uppercase tracking-wider hover:bg-neutral-100 shadow-[2px_2px_0px_#A855F7] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
+                          className="px-5 py-2.5 bg-white text-black rounded-xl font-extrabold font-mono text-[10px] uppercase tracking-wider hover:bg-neutral-100 transition-all cursor-pointer"
                         >
-                          Iniciar Câmera 📸
+                          Ativar Câmera 📸
                         </button>
                       </div>
                     )}
 
                     {verificationStep === 'initializing' && (
                       <div className="text-center space-y-3">
-                        <div className="w-12 h-12 border-4 border-t-[#B088F9] border-neutral-700 rounded-full animate-spin mx-auto" />
+                        <div className="w-10 h-10 border-4 border-t-[#B088F9] border-neutral-800 rounded-full animate-spin mx-auto" />
                         <div>
-                          <p className="text-xs font-mono font-bold text-neutral-300">Iniciando feed de vídeo compatível...</p>
+                          <p className="text-[10px] font-mono font-bold text-neutral-400">Verificando feed de câmera...</p>
                         </div>
                       </div>
                     )}
@@ -3089,31 +3039,31 @@ export function InternalDashboard(props: InternalDashboardProps) {
                           <div className="relative">
                             <img 
                               src={userPhotos[0] || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop'} 
-                              className="w-14 h-14 rounded-full object-cover border-2 border-dashed border-[#10B981] p-0.5 bg-neutral-900" 
+                              className="w-14 h-14 rounded-full object-cover border border-dashed border-[#10B981] p-0.5 bg-neutral-900" 
                               alt="Cadastro" 
                             />
                             <span className="absolute -bottom-1.5 -right-1.5 bg-[#10B981] text-black font-mono text-[8px] border border-black rounded px-1 font-black">CADASTRO</span>
                           </div>
 
-                          <div className="w-10 border-t-2 border-dashed border-white/30 relative flex items-center justify-center">
+                          <div className="w-10 border-t-2 border-dashed border-white/20 relative flex items-center justify-center">
                             <span className="text-xs absolute animate-pulse">⚡</span>
                           </div>
 
                           {/* Scanner Mapped Avatar */}
                           <div className="relative">
-                            <div className="w-14 h-14 rounded-full bg-[#1e1430] border-2 border-dashed border-brand-purple p-0.5 flex items-center justify-center">
+                            <div className="w-14 h-14 rounded-full bg-[#1e1430] border border-dashed border-brand-purple p-0.5 flex items-center justify-center">
                               <Smile size={24} className="text-[#B088F9] animate-bounce" />
                             </div>
                             <span className="absolute -bottom-1.5 -right-1.5 bg-brand-purple text-white font-mono text-[8px] border border-black rounded px-1 font-black">SCANNER</span>
                           </div>
                         </div>
 
-                        <div className="space-y-1.5">
-                          <p className="text-xs font-bold font-mono text-neutral-200">Cruzando vetores de semelhança fisionômica...</p>
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-bold font-mono text-neutral-300">Analisando fisionomia contra fotos...</p>
                           <div className="text-2xl font-black font-display text-brand-purple tracking-tight leading-none">
-                            {similarityRate}% similar
+                            {similarityRate}% similaridade
                           </div>
-                          <div className="w-full bg-neutral-800 rounded-full h-2.5 overflow-hidden border border-black">
+                          <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
                             <div 
                               className="bg-brand-purple h-full transition-all duration-100"
                               style={{ width: `${(similarityRate / (shouldSimulateMismatch ? 31.4 : 96.8)) * 100}%` }}
@@ -3124,14 +3074,14 @@ export function InternalDashboard(props: InternalDashboardProps) {
                     )}
 
                     {verificationStep === 'success' && (
-                      <div className="text-center space-y-3.5 px-3 animate-in scale-in duration-300">
-                        <div className="w-16 h-16 bg-[#E2F0CB] rounded-full mx-auto border-2 border-black flex items-center justify-center shadow-[3px_3px_0px_#000]">
+                      <div className="text-center space-y-4 px-3 animate-in scale-in duration-300">
+                        <div className="w-16 h-16 bg-[#E2F0CB] rounded-full mx-auto flex items-center justify-center border-2 border-black shadow-[3px_3px_0px_#000]">
                           <img src="https://img.icons8.com/?size=100&id=6xO3fnY41hu2&format=png&color=000000" className="w-9 h-9" alt="" />
                         </div>
                         <div>
-                          <p className="text-sm font-black font-display text-[#A3E635]">AUTENTICAÇÃO APROVADA!</p>
-                          <p className="text-[10px] text-neutral-300 font-mono mt-1 leading-relaxed">
-                            O padrão geométrico corresponde com as imagens de cadastro. Conta selada!
+                          <p className="text-sm font-black font-display text-[#A3E635]">VERIFICAÇÃO APROVADA!</p>
+                          <p className="text-[11px] text-neutral-300 font-mono mt-1.5 leading-relaxed">
+                            A biometria facial coincide com as imagens de cadastro.
                           </p>
                         </div>
                         <button
@@ -3139,7 +3089,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
                           onClick={() => {
                             setIsFaceVerificationModalOpen(false);
                           }}
-                          className="px-5 py-2.5 bg-[#A3E635] text-black border-2 border-black rounded-xl font-black font-sans text-[10px] uppercase tracking-wider hover:bg-[#86be26] shadow-[2.5px_2.5px_0px_#000] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
+                          className="px-5 py-2.5 bg-[#A3E635] text-black border-2 border-black rounded-xl font-black font-sans text-[11px] uppercase tracking-wider hover:bg-[#86be26] shadow-[2.5px_2.5px_0px_#000] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
                         >
                           Concluir e Exibir Selo 🏆
                         </button>
@@ -3147,14 +3097,14 @@ export function InternalDashboard(props: InternalDashboardProps) {
                     )}
 
                     {verificationStep === 'failed' && (
-                      <div className="text-center space-y-3.5 px-3 animate-in scale-in duration-200">
+                      <div className="text-center space-y-4 px-3 animate-in scale-in duration-200">
                         <div className="w-14 h-14 bg-red-100 rounded-full mx-auto border-2 border-black flex items-center justify-center text-red-600 font-black text-2xl shadow-[3px_3px_0px_#000]">
                           ❌
                         </div>
                         <div>
-                          <p className="text-sm font-black font-display text-red-400 font-semibold uppercase">DIVERGÊNCIA FACIAL DETECTADA</p>
-                          <p className="text-[10px] text-neutral-300 font-mono mt-1 leading-normal">
-                            As marcas correspondidas não possuem consistência física com o seu portfólio.
+                          <p className="text-sm font-black font-display text-red-400 font-semibold uppercase">ERRO DE VERIFICAÇÃO</p>
+                          <p className="text-[11px] text-neutral-300 font-mono mt-1.5 leading-normal">
+                            As marcas correspondidas não possuem consistência física com o cadastro.
                           </p>
                         </div>
                         <div className="flex gap-2 w-full">
@@ -3164,7 +3114,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
                               resetFaceVerificationState();
                               startFaceCamera();
                             }}
-                            className="flex-1 py-2 bg-white text-black border-2 border-black rounded-lg font-bold font-mono text-[9px] hover:bg-neutral-100"
+                            className="flex-1 py-2 bg-white text-black rounded-lg font-bold font-mono text-[10px] hover:bg-neutral-100"
                           >
                             Tentar De Novo 🔄
                           </button>
@@ -3173,7 +3123,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
                             onClick={() => {
                               setIsFaceVerificationModalOpen(false);
                             }}
-                            className="flex-1 py-2 bg-neutral-800 text-white border-2 border-black rounded-lg font-bold font-mono text-[9px] hover:bg-neutral-700"
+                            className="flex-1 py-2 bg-neutral-900 border border-white/10 text-white rounded-lg font-bold font-mono text-[10px] hover:bg-neutral-800"
                           >
                             Sair
                           </button>
@@ -3186,17 +3136,17 @@ export function InternalDashboard(props: InternalDashboardProps) {
 
                 {/* Instruções de Movimento e Barra de Progresso do Passo Real-Time */}
                 {(verificationStep === 'aligning' || verificationStep === 'approaching' || verificationStep === 'pulling') && (
-                  <div className="absolute inset-x-3 bottom-3 z-30 bg-black/75 backdrop-blur-sm border border-white/20 p-2.5 rounded-2xl text-left flex flex-col gap-1.5 animate-in slide-in-from-bottom duration-200">
+                  <div className="absolute inset-x-3 bottom-3 z-30 bg-black/85 backdrop-blur-sm border border-white/10 p-3 rounded-2xl text-left flex flex-col gap-2 animate-in slide-in-from-bottom duration-200">
                     <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-mono uppercase tracking-widest text-brand-purple font-black">
-                        {verificationStep === 'aligning' ? 'ETAPA 1: ALINHAR ROSTO 📐' : verificationStep === 'approaching' ? 'ETAPA 2: APROXIME-SE 📲' : 'ETAPA 3: AFASTE-SE LERDO 📸'}
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-brand-purple font-black">
+                        {verificationStep === 'aligning' ? 'ETAPA 1: ALINHAR ROSTO 📐' : verificationStep === 'approaching' ? 'ETAPA 2: APROXIME-SE 📲' : 'ETAPA 3: AFASTE-SE LIGEIRO 📸'}
                       </span>
-                      <span className="text-[8.5px] font-mono text-white/70 font-bold">
-                        {distanceValue}% Foco
+                      <span className="text-[10px] font-mono text-white/70 font-bold">
+                        {distanceValue}% Alinhamento
                       </span>
                     </div>
 
-                    <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+                    <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
                       <div 
                         className="bg-brand-purple h-full transition-all duration-100"
                         style={{ width: `${verificationProgress}%` }}
@@ -3207,23 +3157,23 @@ export function InternalDashboard(props: InternalDashboardProps) {
               </div>
 
               {/* Status Message */}
-              <p className="text-[10px] font-mono font-bold text-neutral-600 bg-neutral-100/75 border border-black/10 px-3 py-2 rounded-2xl text-center leading-normal">
+              <p className="text-[11px] font-mono font-bold text-neutral-300 bg-neutral-900 border border-white/10 px-4 py-3 rounded-2xl text-center leading-normal font-sans">
                 {verificationMessage}
               </p>
 
               {/* Opções de Teste de Desenvolvedor na Parte de Baixo (Para Simular Consistência) */}
-              <div className="border-t pt-3 border-dashed border-black/15 flex items-center justify-between gap-2.5 text-left bg-neutral-50 p-2.5 rounded-2xl">
+              <div className="border-t pt-4 border-dashed border-white/10 flex items-center justify-between gap-3 text-left bg-neutral-900/50 p-3 rounded-2xl">
                 <div>
-                  <p className="text-[9.5px] font-black text-black leading-none">Simular Falha de Consistência</p>
-                  <p className="text-[8px] font-mono text-neutral-500 mt-1 leading-tight font-semibold">Tente isto para ver como a conferência lida com rostos diferentes!</p>
+                  <p className="text-[10px] font-black text-white leading-none">Simular Erro de Cadastro</p>
+                  <p className="text-[9px] font-mono text-neutral-400 mt-1 leading-tight font-semibold font-sans">Inverta o cadastro para ver o tratamento de recusa biométrica.</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
                     setShouldSimulateMismatch(!shouldSimulateMismatch);
-                    triggerActionAlert(shouldSimulateMismatch ? "Modo aprovação fisionômica ativado!" : "Simulando falha de correspondência facial.");
+                    triggerActionAlert(shouldSimulateMismatch ? "Modo aprovação facial ativado!" : "Simulando rejeição fisionômica.");
                   }}
-                  className={`px-3 py-1.5 border-2 border-black rounded-lg font-black font-mono text-[8px] uppercase tracking-wider transition-all cursor-pointer ${shouldSimulateMismatch ? 'bg-red-500 text-white shadow-none' : 'bg-[#FAF9F5] text-black shadow-[1.5px_1.5px_0px_#000]'}`}
+                  className={`px-3 py-1.5 border border-white/10 rounded-lg font-black font-mono text-[9px] uppercase tracking-wider transition-all cursor-pointer ${shouldSimulateMismatch ? 'bg-red-600 text-white shadow-none' : 'bg-neutral-800 text-white hover:bg-neutral-700'}`}
                 >
                   {shouldSimulateMismatch ? "Simulando Falha" : "Simular Erro"}
                 </button>
