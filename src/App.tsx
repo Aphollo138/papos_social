@@ -500,7 +500,17 @@ const compressImageBase64 = (base64Str: string, maxWidth = 300, maxHeight = 300)
   });
 };
 
-const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
+const ProfileModal = ({ 
+  isOpen, 
+  onClose, 
+  isForceOnboarding = false, 
+  onProfileCreated 
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  isForceOnboarding?: boolean, 
+  onProfileCreated?: () => void 
+}) => {
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [step, setStep] = useState<'search' | 'confirm'>('search');
@@ -659,7 +669,11 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => voi
 
       alert('Perfil conectado e salvo com sucesso! Bem-vindo à rede.');
       onClose();
-      window.location.reload();
+      if (onProfileCreated) {
+        onProfileCreated();
+      } else {
+        window.location.reload();
+      }
     } catch (err: any) {
       alert('Erro ao conectar perfil: ' + err.message);
     } finally {
@@ -676,6 +690,7 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => voi
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            onClick={isForceOnboarding ? undefined : onClose}
           />
           <motion.div 
             initial={{ opacity: 0, scale: 0.9, rotate: -1 }}
@@ -683,9 +698,11 @@ const ProfileModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => voi
             exit={{ opacity: 0, scale: 0.9, rotate: 1 }}
             className="relative w-full max-w-2xl bg-white rounded-[45px] p-8 md:p-14 positivus-border my-8 z-10 max-h-[90vh] overflow-y-auto shadow-[8px_8px_0px_#000]"
           >
-            <button onClick={onClose} className="absolute top-8 right-8 p-2 hover:bg-black/5 rounded-full transition-colors">
-              <X />
-            </button>
+            {!isForceOnboarding && (
+              <button onClick={onClose} className="absolute top-8 right-8 p-2 hover:bg-black/5 rounded-full transition-colors">
+                <X />
+              </button>
+            )}
 
             <div className="text-center mb-8">
                <Badge className="mb-4">Perfis Reais</Badge>
@@ -1080,6 +1097,7 @@ export default function App() {
   const [authModal, setAuthModal] = useState<{isOpen: boolean, mode: 'login' | 'signup'}>({ isOpen: false, mode: 'signup' });
   const [profileModal, setProfileModal] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [hasProfileInDb, setHasProfileInDb] = useState<boolean | null>(null);
 
   // States para a Área Logada (Interna)
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -1149,44 +1167,57 @@ export default function App() {
           }
         }
         setUserProfile(finalProfile);
+        setHasProfileInDb(true);
       } else {
         // Fallback robusto se a linha no banco ainda não foi criada
-        setUserProfile({
-          id: userId,
-          instagram_username: 'usuario_followwave',
-          full_name: 'Novo Criador',
-          avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&h=150&fit=crop',
-          followers_count: '1.2k',
-          bio: 'Criador de conteúdo focado em conexões reais. Vamos crescer juntos! 🚀',
-          age: 25,
-          gender: 'Masculino'
-        });
+        setUserProfile(null);
+        setHasProfileInDb(false);
       }
     } catch (err) {
-      console.warn('Erro ao carregar perfil do banco, usando perfil padrão simulado:', err);
+      console.warn('Erro ao carregar perfil do banco, forçando onboarding do criador:', err);
+      setUserProfile(null);
+      setHasProfileInDb(false);
     }
   };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
-      setUser(currentUser);
       if (currentUser) {
-        fetchUserProfile(currentUser.id);
-        checkUserProfile(currentUser.id);
+        const isEmailVerified = !!(currentUser.email_confirmed_at || currentUser.confirmed_at);
+        if (!isEmailVerified) {
+          supabase.auth.signOut();
+          setUser(null);
+          setHasProfileInDb(null);
+        } else {
+          setUser(currentUser);
+          fetchUserProfile(currentUser.id);
+        }
+      } else {
+        setUser(null);
+        setHasProfileInDb(null);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const currentUser = session?.user ?? null;
-      setUser(currentUser);
       if (currentUser) {
-        fetchUserProfile(currentUser.id);
-        if (event === 'SIGNED_IN') {
-          checkUserProfile(currentUser.id);
+        const isEmailVerified = !!(currentUser.email_confirmed_at || currentUser.confirmed_at);
+        if (!isEmailVerified) {
+          await supabase.auth.signOut();
+          setUser(null);
+          setHasProfileInDb(null);
+          if (event === 'SIGNED_IN') {
+            alert('Aviso: É necessário confirmar o seu e-mail antes de acessar a plataforma. Por favor, verifique sua caixa de entrada.');
+          }
+        } else {
+          setUser(currentUser);
+          fetchUserProfile(currentUser.id);
         }
       } else {
+        setUser(null);
         setUserProfile(null);
+        setHasProfileInDb(null);
       }
     });
 
@@ -1212,52 +1243,72 @@ export default function App() {
   return (
     <div className="min-h-screen bg-surface">
       {user ? (
-        <>
-          <InternalDashboard 
-            user={user}
-            userProfile={userProfile}
-            setUserProfile={setUserProfile}
-            onLogout={handleLogout}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            activeFilterNiche={activeFilterNiche}
-            setActiveFilterNiche={setActiveFilterNiche}
-            activeFilterGender={activeFilterGender}
-            setActiveFilterGender={setActiveFilterGender}
-            currentProfileIndex={currentProfileIndex}
-            setCurrentProfileIndex={setCurrentProfileIndex}
-            matchNotification={matchNotification}
-            setMatchNotification={setMatchNotification}
-            commentsModal={commentsModal}
-            setCommentsModal={setCommentsModal}
-            newCommentText={newCommentText}
-            setNewCommentText={setNewCommentText}
-            recentActionText={recentActionText}
-            setRecentActionText={setRecentActionText}
-            likedProfiles={likedProfiles}
-            setLikedProfiles={setLikedProfiles}
-            passedProfiles={passedProfiles}
-            setPassedProfiles={setPassedProfiles}
-            userMatches={userMatches}
-            setUserMatches={setUserMatches}
-            sentComments={sentComments}
-            setSentComments={setSentComments}
-            activeChatId={activeChatId}
-            setActiveChatId={setActiveChatId}
-            chatMessages={chatMessages}
-            setChatMessages={setChatMessages}
-            typedMessage={typedMessage}
-            setTypedMessage={setTypedMessage}
-            isTyping={isTyping}
-            setIsTyping={setIsTyping}
-            onOpenProfileEdit={() => setProfileModal(true)}
-          />
+        hasProfileInDb === false ? (
+          <div className="fixed inset-0 bg-[#FAF9F5] z-[90] flex flex-col min-h-screen overflow-y-auto">
+            <Navbar 
+              user={user} 
+              onLogout={handleLogout}
+              onAuthOpen={() => {}} 
+            />
+            <div className="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-[#B088F9]/20 via-transparent to-transparent">
+              <ProfileModal 
+                isOpen={true}
+                onClose={() => {}}
+                isForceOnboarding={true}
+                onProfileCreated={() => {
+                  fetchUserProfile(user.id);
+                }}
+              />
+            </div>
+          </div>
+        ) : (
+          <>
+            <InternalDashboard 
+              user={user}
+              userProfile={userProfile}
+              setUserProfile={setUserProfile}
+              onLogout={handleLogout}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              activeFilterNiche={activeFilterNiche}
+              setActiveFilterNiche={setActiveFilterNiche}
+              activeFilterGender={activeFilterGender}
+              setActiveFilterGender={setActiveFilterGender}
+              currentProfileIndex={currentProfileIndex}
+              setCurrentProfileIndex={setCurrentProfileIndex}
+              matchNotification={matchNotification}
+              setMatchNotification={setMatchNotification}
+              commentsModal={commentsModal}
+              setCommentsModal={setCommentsModal}
+              newCommentText={newCommentText}
+              setNewCommentText={setNewCommentText}
+              recentActionText={recentActionText}
+              setRecentActionText={setRecentActionText}
+              likedProfiles={likedProfiles}
+              setLikedProfiles={setLikedProfiles}
+              passedProfiles={passedProfiles}
+              setPassedProfiles={setPassedProfiles}
+              userMatches={userMatches}
+              setUserMatches={setUserMatches}
+              sentComments={sentComments}
+              setSentComments={setSentComments}
+              activeChatId={activeChatId}
+              setActiveChatId={setActiveChatId}
+              chatMessages={chatMessages}
+              setChatMessages={setChatMessages}
+              typedMessage={typedMessage}
+              setTypedMessage={setTypedMessage}
+              isTyping={isTyping}
+              setIsTyping={setIsTyping}
+              onOpenProfileEdit={() => setProfileModal(true)}
+            />
 
-          <ProfileModal 
-            isOpen={profileModal}
-            onClose={() => setProfileModal(false)}
-          />
-        </>
+            <ProfileModal 
+              isOpen={profileModal}
+              onClose={() => setProfileModal(false)}
+            />
+          </>
+        )
       ) : (
         <>
           <Navbar 
