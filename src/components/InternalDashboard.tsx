@@ -969,7 +969,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
   return (
     <div className={cn(
       "bg-[#FAF9F5] relative antialiased text-black transition-all",
-      activeTab === 'chat'
+      activeTab === 'chat' || activeTab === 'profile'
         ? "w-full max-w-4xl mx-auto px-0 md:px-4 h-screen overflow-hidden pb-[60px]"
         : "min-h-screen pb-14 pt-1 px-1.5 sm:px-4 max-w-xl mx-auto"
     )}>
@@ -977,7 +977,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
       {/* HEADER DA ÁREA INTERNA - ESTILO COMPACTO SEM BORDAS */}
       <div className={cn(
         "flex items-center justify-between w-full py-2 px-1 mb-3 bg-[#FAF9F5]/90 backdrop-blur-md sticky top-0 z-[110]",
-        activeTab === 'chat' && "hidden md:flex"
+        (activeTab === 'chat' || activeTab === 'profile') && "hidden md:flex"
       )}>
         <div className="flex items-center gap-2">
           <div>
@@ -1779,11 +1779,11 @@ export function InternalDashboard(props: InternalDashboardProps) {
         )}
 
         {activeTab === 'profile' && (
-          <div className="w-full max-w-xl mx-auto pb-10 text-left animate-in fade-in duration-300 px-1 sm:px-0">
+          <div className="w-full max-w-xl mx-auto text-left animate-in fade-in duration-300 px-0 md:px-4 h-[calc(100vh-62px)] md:h-[calc(100vh-145px)] overflow-y-auto no-scrollbar pb-24 md:pb-10">
             
             {/* IF COMPONENT IS IN VIEW MODE (Visualizar Perfil) */}
             {profileActiveSubTab === 'view' && (
-              <div className="bg-white border-3 border-black rounded-[24px] p-4.5 sm:p-5.5 shadow-[4px_4px_0px_rgba(0,0,0,1)] relative overflow-hidden flex flex-col gap-3.5 bg-gradient-to-b from-white to-[#FAF9F5] group">
+              <div className="bg-white md:border-3 border-black md:rounded-[24px] min-h-full p-4.5 sm:p-5.5 shadow-none md:shadow-[4px_4px_0px_rgba(0,0,0,1)] relative overflow-hidden flex flex-col gap-3.5 bg-gradient-to-b from-white to-[#FAF9F5] group">
                 
                 {/* Badge de Verificação Ativa no Canto */}
                 {isVerified && (
@@ -1908,24 +1908,12 @@ export function InternalDashboard(props: InternalDashboardProps) {
                   </div>
                 </div>
 
-                {/* Botão de abrir edição ao final do card */}
-                <div className="pt-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setProfileActiveSubTab('edit')}
-                    className="w-full py-2.5 bg-[#B088F9] hover:bg-[#9965F7] border-2 border-black rounded-xl text-[10px] font-black font-mono uppercase tracking-wider text-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Sliders size={12} />
-                    <span>Gerenciar Fotos e Dados</span>
-                  </button>
-                </div>
-
               </div>
             )}
 
             {/* IF COMPONENT IS IN EDIT MODE (Card Completo de Edição) */}
             {profileActiveSubTab === 'edit' && (
-              <div className="bg-white border-3 border-black rounded-[24px] p-4.5 sm:p-5.5 shadow-[4px_4px_0px_rgba(0,0,0,1)] text-left flex flex-col gap-4 animate-in slide-in-from-bottom-2 duration-300">
+              <div className="bg-white md:border-3 border-black md:rounded-[24px] min-h-full p-4.5 sm:p-5.5 shadow-none md:shadow-[4px_4px_0px_rgba(0,0,0,1)] text-left flex flex-col gap-4 animate-in slide-in-from-bottom-2 duration-300">
                 
                 {/* Título de Edição com Botão de Voltar */}
                 <div className="border-b-2 border-black/10 pb-2.5 flex items-center justify-between gap-2">
