@@ -31,7 +31,9 @@ import {
   Camera,
   Smile,
   Mars,
-  Venus
+  Venus,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
@@ -492,6 +494,10 @@ export function InternalDashboard(props: InternalDashboardProps) {
   const [filterAgeMin, setFilterAgeMin] = useState<number>(16);
   const [filterAgeMax, setFilterAgeMax] = useState<number>(99);
   const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
+
+                      
+                      
+                      
 
   // Define sexo de preferência automaticamente puxado dos dados de cadastro
   useEffect(() => {
@@ -1407,140 +1413,278 @@ export function InternalDashboard(props: InternalDashboardProps) {
         {/* TELA DE CHAT: CONVERSAS COM OS ANFITRIÕES DO INSTAGRAM */}
         {/* ======================================================== */}
         {activeTab === 'chat' && (
-          <div className="bg-white border-4 border-black rounded-[32px] shadow-[6px_6px_0px_#000] overflow-hidden grid grid-cols-1 md:grid-cols-3 max-w-4xl mx-auto min-h-[500px]">
+          <div className="bg-[#FAF9F5] border-4 border-black rounded-[32px] shadow-[6px_6px_0px_#000] overflow-hidden grid grid-cols-1 md:grid-cols-3 max-w-4xl mx-auto h-[calc(100vh-145px)] min-h-[470px] max-h-[650px]">
             
-            {/* LADO ESQUERDO: LISTA DE PARCEIROS */}
-            <div className="border-b-4 md:border-b-0 md:border-r-4 border-black p-4 bg-white space-y-4">
-              <h3 className="text-lg font-black font-display border-b-2 border-black/10 pb-2 text-left">Suas Divulgações</h3>
-              
-              <div className="space-y-2 text-left max-h-[400px] overflow-y-auto">
-                {userMatches.map(matchId => {
-                  const creatorInfo = FEED_PROFILES.find(p => p.id === matchId);
-                  if (!creatorInfo) return null;
-                  const isSelected = activeChatId === matchId;
-                  const currentMsgList = chatMessages[matchId] || [];
-                  const lastMsg = currentMsgList[currentMsgList.length - 1];
+            {/* LADO ESQUERDO: LISTA DE PARCEIROS E CONVERSAS NO ESTILO DE SCREEN DO CELULAR (Esconde no celular se houver chat ativo) */}
+            <div className={cn(
+              "border-r-0 md:border-r-4 border-black p-4 md:p-5 bg-white flex flex-col h-full overflow-hidden select-none",
+              activeChatId ? "hidden md:flex" : "flex"
+            )}>
+              {/* Header de "Conversas" com título pesado estilo Yubo e ícone */}
+              <div className="flex items-center justify-between pb-3.5 shrink-0">
+                <h3 className="text-2xl font-black font-display text-black tracking-tight">
+                  Conversas
+                </h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsFilterOpen(true)}
+                    className="p-1.5 bg-neutral-100 hover:bg-neutral-200 border-2 border-black rounded-xl transition-all shadow-[1.5px_1.5px_0px_#000] active:translate-y-0.5 active:shadow-none cursor-pointer"
+                    title="Configurações de Filtro"
+                  >
+                    <Sliders size={15} className="text-black" />
+                  </button>
+                  <span className="text-[10px] font-black font-mono bg-[#FAF9F5] border-2 border-black px-1.5 py-0.5 rounded-lg shadow-[1.5px_1.5px_0px_#000]">
+                    💡 {userMatches.length}
+                  </span>
+                </div>
+              </div>
 
-                  return (
-                    <button
-                      key={matchId}
-                      onClick={() => setActiveChatId(matchId)}
-                      className={cn(
-                        "w-full p-3 flex items-center gap-3 rounded-2xl border-2 transition-all text-left",
-                        isSelected 
-                          ? "bg-brand-purple border-black shadow-[2px_2px_0px_#000]" 
-                          : "bg-surface border-black/10 hover:border-black shadow-sm"
-                      )}
-                    >
-                      <img src={(creatorInfo.images && creatorInfo.images[0]) || 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=150&h=150&fit=crop'} className="w-12 h-12 rounded-full border-2 border-black object-cover bg-white" alt="" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm leading-tight text-black flex items-center justify-between">
-                          <span>{creatorInfo.name}</span>
-                          <span className="text-[10px] font-light opacity-65">{lastMsg?.time || 'Início'}</span>
-                        </p>
-                        <p className="text-xs text-black/50 font-mono leading-none mt-1">{creatorInfo.id}</p>
-                        <p className="text-xs text-black/70 truncate mt-1.5 font-sans leading-relaxed">
-                          {lastMsg ? lastMsg.text : "Match de networking realizado!"}
-                        </p>
+              {/* CONTEÚDO SCROLLÁVEL DO PORTAL DE CONVERSAS */}
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-thin text-left no-scrollbar">
+                
+                {/* SEÇÃO "NOVOS AMIGOS" COM CARDS VERTICAIS DE FOTOS */}
+                <div className="space-y-1.5 shrink-0">
+                  <span className="text-[10px] font-black uppercase font-mono tracking-wider text-black/50 block">
+                    Novos amigos
+                  </span>
+                  
+                  <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin no-scrollbar touch-pan-x py-1">
+                    {/* Amigos Adicionados da lista real */}
+                    {userMatches.map(matchId => {
+                      const creatorInfo = FEED_PROFILES.find(p => p.id === matchId);
+                      if (!creatorInfo) return null;
+                      const isSelected = activeChatId === matchId;
+                      return (
+                        <div key={matchId} className="flex flex-col items-center shrink-0">
+                          <button
+                            onClick={() => setActiveChatId(matchId)}
+                            className={cn(
+                              "w-[80px] h-[110px] rounded-[20px] border-2 overflow-hidden relative shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none hover:scale-105 transition-all bg-neutral-100 cursor-pointer",
+                              isSelected ? "border-brand-purple ring-2 ring-brand-purple" : "border-black"
+                            )}
+                          >
+                            <img 
+                              src={(creatorInfo.images && creatorInfo.images[0]) || 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=150&h=150&fit=crop'} 
+                              className="w-full h-full object-cover" 
+                              alt={creatorInfo.name} 
+                              referrerPolicy="no-referrer"
+                            />
+                            {/* Online vibe indicator */}
+                            <span className="absolute top-2 right-2 w-2 h-2 bg-[#A3E635] border border-black rounded-full" />
+                            
+                            {/* Subtle name badge overlay at bottom of card */}
+                            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 pt-4 text-left">
+                              <span className="text-[8px] font-black font-mono text-white tracking-wide uppercase truncate block">
+                                @{creatorInfo.id.split('_')[0]}
+                              </span>
+                            </div>
+                          </button>
+                          <span className="text-[9px] font-black font-mono text-black mt-1 truncate max-w-[76px]">
+                            {creatorInfo.name.split(' ')[0]}
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                    {userMatches.length === 0 && (
+                      <div className="flex items-center gap-2.5 px-3 py-6 bg-yellow-50/50 border border-dashed border-black/15 rounded-2xl w-full text-left font-mono">
+                        <span className="text-lg">🧭</span>
+                        <div>
+                          <p className="text-[9px] font-black uppercase text-black">Nenhum match ainda</p>
+                          <p className="text-[8px] text-zinc-500 leading-none mt-0.5">Explore os criadores no feed e deslize!</p>
+                        </div>
                       </div>
-                    </button>
-                  );
-                })}
+                    )}
+                  </div>
+                </div>
 
-                {userMatches.length === 0 && (
-                  <p className="text-xs text-black/50 text-center py-8">Nenhum match estabelecido ainda. Vá para o Match Feed!</p>
-                )}
+                {/* PROMOTION BANNER ESTILO YUBO HYPERSURGE */}
+                <div className="bg-brand-purple border-2 border-black rounded-2xl p-3 flex items-center justify-between shadow-[2px_2px_0px_#000] my-1 select-none hover:translate-y-[-1px] transition-all cursor-pointer">
+                  <div className="flex items-center gap-2.5 text-left">
+                    <div className="w-8 h-8 rounded-xl bg-[#FAF9F5] border-2 border-black flex items-center justify-center text-xs shadow-[1.5px_1.5px_0px_#000] shrink-0">
+                      ⚡
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-black uppercase tracking-tight text-black">Multiplique os contatos</h4>
+                      <p className="text-[8.5px] font-mono font-bold text-black/60 leading-tight">Complete suas fotos para ganhar 10x mais propostas.</p>
+                    </div>
+                  </div>
+                  <ChevronRight size={13} className="text-black stroke-[3.5] shrink-0" />
+                </div>
+
+                {/* SEÇÃO "CONVERSAS RECENTES" */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase font-mono tracking-wider text-black/55 block">
+                    Conversas Recentes
+                  </span>
+
+                  {userMatches.map(matchId => {
+                    const creatorInfo = FEED_PROFILES.find(p => p.id === matchId);
+                    if (!creatorInfo) return null;
+                    const isSelected = activeChatId === matchId;
+                    const currentMsgList = chatMessages[matchId] || [];
+                    const lastMsg = currentMsgList[currentMsgList.length - 1];
+
+                    return (
+                      <button
+                        key={matchId}
+                        onClick={() => setActiveChatId(matchId)}
+                        className={cn(
+                          "w-full p-2.5 flex items-center gap-3 rounded-2xl border-2 transition-all text-left cursor-pointer",
+                          isSelected 
+                            ? "bg-brand-purple border-black shadow-[3px_3px_0px_#000] translate-y-[-1px]" 
+                            : "bg-[#FAF9F5]/40 hover:bg-[#FAF9F5] border-[#FAF9F5] hover:border-black shadow-sm"
+                        )}
+                      >
+                        <div className="relative shrink-0">
+                          <img 
+                            src={(creatorInfo.images && creatorInfo.images[0]) || 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=150&h=150&fit=crop'} 
+                            className="w-11 h-11 rounded-full border border-black object-cover bg-white" 
+                            alt="" 
+                            referrerPolicy="no-referrer"
+                          />
+                          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#A3E635] border border-black rounded-full" />
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="font-black text-xs sm:text-sm text-black truncate">{creatorInfo.name}</span>
+                            <span className="text-[8.5px] font-mono font-bold text-zinc-500 shrink-0 pr-1">{lastMsg?.time || 'Recente'}</span>
+                          </div>
+                          <p className="text-[9.5px] text-zinc-400 font-mono leading-none">@{creatorInfo.id}</p>
+                          <p className="text-[11px] font-medium text-zinc-700 truncate mt-1">
+                            {lastMsg ? `Você: ${lastMsg.text}` : "Adicionado! Comece a negociar collabs."}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+
+                  {userMatches.length === 0 && (
+                    <div className="text-center py-10 rounded-2xl bg-neutral-50/50 border border-dashed border-black/10">
+                      <MessageSquare className="mx-auto text-neutral-400 w-5 h-5 mb-2" />
+                      <p className="text-[10px] font-mono text-zinc-400">Nenhuma conversa iniciada.</p>
+                    </div>
+                  )}
+                </div>
+
               </div>
             </div>
 
-            {/* LADO DIREITO: INTERFACE DE CHAT ATIVO */}
-            <div className="col-span-2 flex flex-col h-[500px] bg-[#FAF9F6]">
+            {/* LADO DIREITO/COMPLETO: INTERFACE DO CHAT ATIVO */}
+            <div className={cn(
+              "col-span-1 md:col-span-2 flex flex-col h-full bg-[#FAF9F5] overflow-hidden justify-between",
+              activeChatId ? "flex" : "hidden md:flex"
+            )}>
               {activeChatId ? (
                 <>
                   {/* CABEÇALHO DO CHAT */}
-                  <div className="bg-white border-b-2 border-black p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-left">
-                      <img src={(activeChatPartner.images && activeChatPartner.images[0]) || 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=150&h=150&fit=crop'} className="w-10 h-10 rounded-full border-2 border-black object-cover" alt="" />
-                      <div>
-                        <h4 className="font-bold leading-tight">{activeChatPartner.name}</h4>
+                  <div className="bg-white border-b-2 border-black p-3 md:p-3.5 flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-2.5 text-left min-w-0">
+                      {/* Botão de Voltar - Visível apenas no Celular */}
+                      <button 
+                        type="button"
+                        onClick={() => setActiveChatId(null)}
+                        className="md:hidden flex items-center justify-center p-2 bg-[#FAF9F5] hover:bg-neutral-100 border-2 border-black rounded-xl transition-all shadow-[1.5px_1.5px_0px_#000] active:translate-y-0.5 active:shadow-none cursor-pointer shrink-0"
+                        title="Voltar para a lista"
+                      >
+                        <ChevronLeft size={14} className="stroke-[3.5]" />
+                      </button>
+
+                      <div className="relative shrink-0">
+                        <img 
+                          src={(activeChatPartner.images && activeChatPartner.images[0]) || 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=150&h=150&fit=crop'} 
+                          className="w-10 h-10 rounded-full border-2 border-black object-cover" 
+                          alt="" 
+                          referrerPolicy="no-referrer"
+                        />
+                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#A3E635] border border-black rounded-full" />
+                      </div>
+                      
+                      <div className="min-w-0">
+                        <h4 className="font-extrabold text-xs sm:text-sm leading-tight text-black truncate">
+                          {activeChatPartner.name}
+                        </h4>
                         <a 
                           href={`https://instagram.com/${activeChatPartner.id}`} 
                           target="_blank" 
                           rel="noreferrer"
-                          className="text-xs font-mono text-brand-purple font-semibold hover:underline flex items-center gap-0.5"
+                          className="text-[9px] font-mono text-brand-purple font-black hover:underline flex items-center gap-0.5 mt-0.5"
                         >
-                          <Instagram size={10} />
+                          <Instagram size={9} />
                           {activeChatPartner.id}
                         </a>
                       </div>
                     </div>
-                    <span className="text-[11px] font-mono font-bold bg-[#A3E635] text-black border-2 border-black px-2.5 py-0.5 rounded-full shadow-[1px_1px_0px_#000]">
+                    
+                    <span className="text-[9px] font-mono font-black bg-[#A3E635] text-black border-2 border-black px-2 py-0.5 rounded-full shadow-[1.5px_1.5px_0px_#000] text-center shrink-0">
                       Match Ativo 🔥
                     </span>
                   </div>
 
                   {/* CORPO DE MENSAGENS COM SCROLL */}
-                  <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                  <div className="flex-1 p-4 md:p-5 overflow-y-auto space-y-4 pr-2 scrollbar-thin">
                     {(chatMessages[activeChatId] || []).map((msg, idx) => {
                       const isMe = msg.sender === 'me';
                       return (
                         <div 
                           key={idx} 
                           className={cn(
-                            "flex flex-col max-w-[80%]",
+                            "flex flex-col max-w-[85%]",
                             isMe ? "ml-auto items-end" : "mr-auto items-start"
                           )}
                         >
                           <div 
                             className={cn(
-                              "p-3.5 rounded-2xl border-2 text-sm leading-relaxed",
+                              "p-3 rounded-2xl border-2 text-xs leading-relaxed transition-all shadow-[2.5px_2.5px_0px_rgba(0,0,0,1)]",
                               isMe 
-                                ? "bg-[#DFD3F2] border-black text-black rounded-tr-none shadow-[2px_2px_0px_rgba(0,0,0,1)]" 
-                                : "bg-white border-black text-black rounded-tl-none shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                                ? "bg-[#DFD3F2] border-black text-black rounded-tr-none" 
+                                : "bg-white border-black text-black rounded-tl-none"
                             )}
                           >
-                            <p className="text-left">{msg.text}</p>
+                            <p className="text-left font-sans font-medium whitespace-pre-wrap">{msg.text}</p>
                           </div>
-                          <span className="text-[10px] text-black/50 font-mono mt-1 px-1.5">{msg.time}</span>
+                          <span className="text-[8.5px] text-black/45 font-mono mt-1.5 px-1">{msg.time}</span>
                         </div>
                       );
                     })}
 
                     {isTyping && (
-                      <div className="flex items-center gap-2 mr-auto text-xs text-black/40 font-mono bg-white border border-black/20 px-3 py-1.5 rounded-full shadow-sm animate-pulse">
-                        <RefreshCw size={10} className="animate-spin" />
-                        <span>@{activeChatPartner.id || 'Parceiro'} está digitando propostas...</span>
+                      <div className="flex items-center gap-2 mr-auto text-[9.5px] text-[#A3E635] font-mono bg-black border-2 border-black px-3.5 py-1.5 rounded-full shadow-inner animate-pulse">
+                        <RefreshCw size={10} className="animate-spin text-[#A3E635]" />
+                        <span>@{activeChatPartner.id || 'Parceiro'} está escrevendo propostas...</span>
                       </div>
                     )}
                     <div ref={chatEndRef} />
                   </div>
 
                   {/* CAIXA DE ENVIO DE MENSAGEM */}
-                  <form onSubmit={handleSendMessage} className="p-3 bg-white border-t-2 border-black flex gap-2">
+                  <form onSubmit={handleSendMessage} className="p-3 bg-white border-t-2 border-black flex gap-2 shrink-0">
                     <input 
                       type="text" 
                       value={typedMessage}
                       onChange={(e) => setTypedMessage(e.target.value)}
-                      placeholder="Combine Stories, Posts Colaborativos ou Troca de indicações..." 
-                      className="flex-1 bg-surface border-2 border-black rounded-xl px-4 outline-none focus:border-brand-purple transition-all text-sm"
+                      placeholder="Combine Stories, Reels Colaborativos ou Troca de indicações..." 
+                      className="flex-1 bg-surface border-2 border-black rounded-xl px-4 py-2.5 outline-none focus:border-brand-purple transition-all text-xs"
                     />
                     <button 
                       type="submit" 
-                      className="p-3.5 bg-brand-purple hover:bg-opacity-95 text-black border-2 border-black rounded-xl shadow-[2px_2px_0px_#000] active:shadow-none active:translate-y-0.5"
+                      className="p-3.5 bg-brand-purple hover:bg-opacity-95 text-black border-2 border-black rounded-xl shadow-[2px_2px_0px_#000] active:shadow-none active:translate-y-0.5 flex items-center justify-center cursor-pointer transition-all"
                     >
-                      <Send size={15} />
+                      <Send size={14} className="stroke-[2.5]" />
                     </button>
                   </form>
                 </>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
-                  <div className="w-14 h-14 bg-card-lilac border-2 border-black rounded-2xl flex items-center justify-center shadow-[2px_2px_0px_#000]">
+                  <div className="w-14 h-14 bg-[#FFD166] border-2 border-black rounded-2xl flex items-center justify-center shadow-[3px_3px_0px_#000] animate-bounce">
                     <MessageCircle className="w-7 h-7 text-black" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-lg">Selecione uma Conversa</h4>
-                    <p className="text-sm text-black/60 max-w-xs mt-2 leading-relaxed">
-                      Escolha um dos perfis com quem você deu match no menu lateral para iniciar conversas de divulgação mútua!
+                    <h4 className="font-display font-black text-sm uppercase tracking-wide">Selecione uma Conversa</h4>
+                    <p className="text-xs text-black/60 max-w-xs mt-2 leading-relaxed">
+                      Escolha um dos perfis com quem você deu match no menu ao lado para iniciar conversas de divulgação mútua!
                     </p>
                   </div>
                 </div>
