@@ -1162,30 +1162,25 @@ export default function App() {
         </div>
 
         {/* LOGO MARQUEE */}
-        <div className="mt-32 overflow-hidden py-8 bg-transparent">
-           <div className="flex animate-marquee gap-24 whitespace-nowrap items-center">
-              {[1, 2, 3, 4, 5].map((loopIdx) => (
-                <div key={loopIdx} className="flex items-center gap-24 shrink-0">
+        <div className="mt-32 overflow-hidden py-8 bg-transparent w-full relative">
+           <div className="flex animate-marquee gap-12 md:gap-24 whitespace-nowrap items-center w-max">
+              {[1, 2].map((loopIdx) => (
+                <div key={loopIdx} className="flex items-center gap-12 md:gap-24 shrink-0">
                   {/* React */}
-                  <div className="flex items-center gap-4 text-3xl font-display font-medium text-black">
-                    <i className="fa-brands fa-react text-[#00D8FF] text-4xl animate-[spin_12s_linear_infinite]"></i>
+                  <div className="flex items-center gap-2 md:gap-4 text-xl sm:text-2xl md:text-3xl font-display font-medium text-black">
+                    <i className="fa-brands fa-react text-[#00D8FF] text-2xl sm:text-3xl md:text-4xl animate-[spin_12s_linear_infinite]"></i>
                     <span className="font-semibold select-none">React</span>
                   </div>
 
                   {/* TypeScript */}
-                  <div className="flex items-center gap-4 text-3xl font-display font-medium text-black">
-                    <div className="w-10 h-10 rounded bg-[#3178C6] text-white flex items-center justify-center font-bold text-base shadow-sm font-sans select-none">TS</div>
+                  <div className="flex items-center gap-2 md:gap-4 text-xl sm:text-2xl md:text-3xl font-display font-medium text-black">
+                    <div className="w-7 h-7 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded bg-[#3178C6] text-white flex items-center justify-center font-bold text-xs sm:text-sm md:text-base shadow-sm font-sans select-none shrink-0">TS</div>
                     <span className="font-semibold select-none">TypeScript</span>
                   </div>
 
-                  {/* Tailwind CSS (No text, just icon as requested) */}
-                  <div className="flex items-center text-3xl font-display font-medium text-black">
-                    <i className="fa-brands fa-tailwind-css text-[#38B2AC] text-4xl"></i>
-                  </div>
-
                   {/* Node.js */}
-                  <div className="flex items-center gap-4 text-3xl font-display font-medium text-black pr-12 border-r border-black/5">
-                    <i className="fa-brands fa-node text-[#339933] text-4xl"></i>
+                  <div className="flex items-center gap-2 md:gap-4 text-xl sm:text-2xl md:text-3xl font-display font-medium text-black">
+                    <i className="fa-brands fa-node text-[#339933] text-2xl sm:text-3xl md:text-4xl"></i>
                     <span className="font-semibold select-none">Node.js</span>
                   </div>
                 </div>
