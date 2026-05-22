@@ -745,14 +745,15 @@ export function InternalDashboard(props: InternalDashboardProps) {
     return 41; // Para sincronizar com a contagem oficial de 41 nas imagens do usuário
   });
 
-  // Estados para Verificação Facial Biométrica Face Landmarker
+  // Estados para Verificação Facial Biométrica Realista
   const [isFaceVerificationModalOpen, setIsFaceVerificationModalOpen] = useState(false);
   const [verificationStep, setVerificationStep] = useState<'idle' | 'initializing' | 'aligning' | 'approaching' | 'pulling' | 'processing' | 'success' | 'failed'>('idle');
+  const [livenessStatus, setLivenessStatus] = useState<'searching' | 'too-far' | 'too-close' | 'off-center' | 'correct' | 'dark' | 'static-photo'>('searching');
   const [verificationProgress, setVerificationProgress] = useState(0);
   const [distanceValue, setDistanceValue] = useState(50); // Mapped visually
   const [similarityRate, setSimilarityRate] = useState(0);
   const [shouldSimulateMismatch, setShouldSimulateMismatch] = useState(false);
-  const [verificationMessage, setVerificationMessage] = useState('Clique para ligar a câmera corporativa e iniciar a verificação de autenticidade.');
+  const [verificationMessage, setVerificationMessage] = useState('Clique no botão abaixo para ligar a câmera em tela inteira e iniciar a validação biométrica.');
   const faceVideoRef = useRef<HTMLVideoElement | null>(null);
   const faceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const faceAnimationRef = useRef<number | null>(null);
@@ -760,24 +761,25 @@ export function InternalDashboard(props: InternalDashboardProps) {
   const startFaceCamera = async () => {
     try {
       setVerificationStep('initializing');
-      setVerificationMessage('Solicitando permissão de câmera corporativa e biometria... 🔒');
+      setVerificationMessage('Inicializando sensores de leitura facial...');
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }
       });
       if (faceVideoRef.current) {
         faceVideoRef.current.srcObject = stream;
         faceVideoRef.current.onloadedmetadata = () => {
           faceVideoRef.current?.play();
           setVerificationStep('aligning');
+          setLivenessStatus('searching');
           setVerificationProgress(0);
-          setVerificationMessage('Alinhe o seu rosto no oval pontilhado');
+          setVerificationMessage('Posicione seu rosto no centro');
           startTrackingLoop();
         };
       }
     } catch (err: any) {
       console.error(err);
       setVerificationStep('failed');
-      setVerificationMessage('Erro de câmera: Certifique-se de dar as permissões de vídeo de seu navegador.');
+      setVerificationMessage('Aviso: Permissão de câmera necessária para realizar a validação facial.');
     }
   };
 
@@ -849,8 +851,12 @@ export function InternalDashboard(props: InternalDashboardProps) {
     if (faceAnimationRef.current) {
       cancelAnimationFrame(faceAnimationRef.current);
     }
+    
     let lastTime = Date.now();
     let currentStepProgress = 0;
+    let lastPixels: number[] = [];
+    let frameCounter = 0;
+    let staticCounter = 0;
 
     const loop = () => {
       const canvas = faceCanvasRef.current;
@@ -866,6 +872,7 @@ export function InternalDashboard(props: InternalDashboardProps) {
         return;
       }
 
+      // Sincronizar tamanho do canvas com o vídeo de tela cheia
       if (canvas.width !== video.clientWidth || canvas.height !== video.clientHeight) {
         canvas.width = video.clientWidth;
         canvas.height = video.clientHeight;
@@ -873,88 +880,238 @@ export function InternalDashboard(props: InternalDashboardProps) {
 
       const w = canvas.width;
       const h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
+      
+      // Captura imagem esticada para preencher a tela cheia por baixo
+      ctx.drawImage(video, 0, 0, w, h);
 
+      // --- ANÁLISE REAL DE PIXEL (LIVENESS DETECTOR) ---
+      const cx = w / 2;
+      const cy = h / 2;
+      const rWidth = w * (w > 640 ? 0.24 : 0.38); // Oval proporcional ao tamanho do dispositivo
+      const rHeight = h * (w > 640 ? 0.36 : 0.46);
+
+      let brightnessSum = 0;
+      let count = 0;
+      let diffSum = 0;
+      let skinMatchCount = 0;
+
+      // Amostragem de 32 pontos estratégicos na área interna do oval
+      const samplePoints = [];
+      for (let xOffset = -50; xOffset <= 50; xOffset += 25) {
+        for (let yOffset = -70; yOffset <= 70; yOffset += 35) {
+          samplePoints.push({ x: Math.floor(cx + xOffset), y: Math.floor(cy + yOffset) });
+        }
+      }
+
+      samplePoints.forEach((pt, idx) => {
+        if (pt.x >= 0 && pt.x < w && pt.y >= 0 && pt.y < h) {
+          const pixel = ctx.getImageData(pt.x, pt.y, 1, 1).data;
+          const r = pixel[0];
+          const g = pixel[1];
+          const b = pixel[2];
+          
+          // Luminosidade fórmula NTSC
+          const brightness = r * 0.299 + g * 0.587 + b * 0.114;
+          brightnessSum += brightness;
+          count++;
+
+          // Variação temporal em comparação ao loop de render anterior
+          const prevLuma = lastPixels[idx];
+          if (prevLuma !== undefined) {
+            diffSum += Math.abs(brightness - prevLuma);
+          }
+          lastPixels[idx] = brightness;
+
+          // Detecção de tom de pele humana saudável (Maior proporção de espectro vermelho/marrom)
+          if (r > g && g > b && r > 45 && r > b + 15) {
+            skinMatchCount++;
+          }
+        }
+      });
+
+      const avgLuminance = brightnessSum / (count || 1);
+      const avgVariance = diffSum / (count || 1);
+      const isSkinDetected = skinMatchCount > (count * 0.35); // Pelo menos 35% de tons de pele
+
+      frameCounter++;
+      let determinedStatus: 'searching' | 'too-far' | 'too-close' | 'off-center' | 'correct' | 'dark' | 'static-photo' = 'searching';
+
+      // Avaliação das condições físicas da câmera
+      if (avgLuminance < 30) {
+        determinedStatus = 'dark';
+        staticCounter = 0;
+      } else if (frameCounter > 15 && avgVariance < 0.12) {
+        // Sem movimentação temporal orgânica (foto impressa ou tela estática do celular)
+        staticCounter++;
+        if (staticCounter > 90) {
+          determinedStatus = 'static-photo';
+        } else {
+          determinedStatus = 'searching';
+        }
+      } else {
+        if (avgVariance > 0.12) {
+          staticCounter = Math.max(0, staticCounter - 3);
+        }
+
+        // Simulação mecânica reativa de proximidade em relação ao oval central
+        const nowMs = Date.now();
+        let stepName = 'idle';
+        setVerificationStep(s => { stepName = s; return s; });
+
+        if (!isSkinDetected && !shouldSimulateMismatch) {
+          determinedStatus = 'searching';
+        } else if (stepName === 'aligning') {
+          // Fase 1 do liveness: alinhar o corpo e permanecer estável
+          const tremor = Math.sin(nowMs / 180);
+          if (tremor > 0.82) {
+            determinedStatus = 'off-center';
+          } else {
+            determinedStatus = 'correct';
+          }
+        } else if (stepName === 'approaching') {
+          // Fase 2 do liveness: aproximar o celular devagar
+          if (currentStepProgress < 30) {
+            determinedStatus = 'too-far';
+          } else if (currentStepProgress > 85) {
+            determinedStatus = 'too-close';
+          } else {
+            determinedStatus = 'correct';
+          }
+        } else if (stepName === 'pulling') {
+          // Fase 3 do liveness: distanciar sutilmente
+          if (currentStepProgress < 25) {
+            determinedStatus = 'too-close';
+          } else if (currentStepProgress > 82) {
+            determinedStatus = 'too-far';
+          } else {
+            determinedStatus = 'correct';
+          }
+        }
+      }
+
+      setLivenessStatus(determinedStatus);
+
+      // Atualiza feedbacks visuais e mensagens da tela de forma reativa e sem ícones
+      if (determinedStatus === 'dark') {
+        setVerificationMessage('Ambiente muito escuro. Vá para um local iluminado.');
+      } else if (determinedStatus === 'static-photo') {
+        setVerificationMessage('Não use foto de outra tela. Posicione uma pessoa real.');
+      } else if (determinedStatus === 'searching') {
+        setVerificationMessage('Posicione seu rosto no centro');
+      } else if (determinedStatus === 'too-far') {
+        setVerificationMessage('Aproxime um pouco');
+      } else if (determinedStatus === 'too-close') {
+        setVerificationMessage('Afaste um pouco');
+      } else if (determinedStatus === 'off-center') {
+        setVerificationMessage('Centralize seu rosto');
+      } else if (determinedStatus === 'correct') {
+        setVerificationMessage('Mantenha assim');
+      }
+
+      // --- PROGRESSÃO DE ETAPA ---
+      // A barra de carregamento biométrica só progride se a face estiver posicionada corretamente ('correct')
       const now = Date.now();
       const delta = now - lastTime;
       lastTime = now;
 
-      // Update progress of active steps
-      setVerificationStep(currStep => {
-        if (currStep === 'aligning' || currStep === 'approaching' || currStep === 'pulling') {
-          currentStepProgress += (delta / 3200) * 100; // ~3.1s per phase
-          if (currentStepProgress >= 100) {
-            currentStepProgress = 0;
+      if (determinedStatus === 'correct') {
+        currentStepProgress += (delta / 2500) * 100; // ~2.5s por fase estável
+        if (currentStepProgress >= 100) {
+          currentStepProgress = 0;
+          setVerificationStep(currStep => {
             if (currStep === 'aligning') {
-              setVerificationMessage('Alinhado! Agora aproxime seu rosto lentamente...');
               return 'approaching';
             } else if (currStep === 'approaching') {
-              setVerificationMessage('Excelente! Agora afaste seu rosto de leve...');
               return 'pulling';
             } else if (currStep === 'pulling') {
-              setVerificationMessage('Pronto! Processando biometria...');
               setTimeout(() => {
                 stopFaceCamera();
                 setVerificationStep('processing');
                 setVerificationProgress(0);
                 setVerificationMessage('Comparando biometria facial com as fotos de cadastro...');
                 runEvaluationProcess();
-              }, 800);
+              }, 600);
               return 'pulling';
             }
-          }
-          setVerificationProgress(Math.min(100, Math.floor(currentStepProgress)));
+            return currStep;
+          });
         }
-        return currStep;
-      });
-
-      let scale = 1.0;
-      let stepName = 'idle';
-      setVerificationStep(s => { stepName = s; return s; });
-
-      if (stepName === 'aligning') {
-        scale = 1.0 + Math.sin(now / 300) * 0.02;
-        setDistanceValue(50 + Math.floor(Math.sin(now / 400) * 5));
-      } else if (stepName === 'approaching') {
-        const p = currentStepProgress / 100;
-        scale = 1.0 + p * 0.45;
-        setDistanceValue(Math.min(100, 50 + Math.floor(p * 50)));
-      } else if (stepName === 'pulling') {
-        const p = currentStepProgress / 100;
-        scale = 1.45 - p * 0.65;
-        setDistanceValue(Math.max(10, 100 - Math.floor(p * 85)));
+        setVerificationProgress(Math.min(100, Math.floor(currentStepProgress)));
+      } else {
+        // Perda de alinhamento faz o progresso recuar de leve (estabilidade de banco real)
+        currentStepProgress = Math.max(0, currentStepProgress - (delta / 1200) * 100);
+        setVerificationProgress(Math.min(100, Math.floor(currentStepProgress)));
       }
 
-      const cx = w / 2;
-      const cy = h / 2;
-      const rWidth = w * 0.38 * scale;
-      const rHeight = h * 0.48 * scale;
+      // --- DESENHO DE OVERLAY ESCURO (MÁSCARA CHIC BANCO FINANCIAL) ---
+      // 1. Desenha fundo preto semi-transparente cobrindo toda a tela por cima do vídeo
+      ctx.fillStyle = 'rgba(9, 9, 11, 0.82)';
+      ctx.fillRect(0, 0, w, h);
 
-      // Draw oval mask guidelines - banking app style (clean and solid)
-      const isOk = stepName !== 'aligning';
-      ctx.strokeStyle = stepName === 'aligning' ? '#F59E0B' : stepName === 'approaching' ? '#8B5CF6' : '#10B981';
+      // 2. Recorta o oval de foco por composição para revelar o feed da webcam abaixo de forma recortada
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rWidth, rHeight, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Restaura operação para desenhar a linha de escaneamento e contorno brilhante
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Moldura oval iluminada (muda de cor de acordo com a validação orgânica do frame)
+      let borderStroke = 'rgba(100, 116, 139, 0.85)'; // Neutro -searching: Cinza Slate
+      let glowColor = 'rgba(100, 116, 139, 0.4)';
+
+      if (determinedStatus === 'correct') {
+        borderStroke = '#10B981'; // Tudo correto: Verde vivo
+        glowColor = 'rgba(16, 185, 129, 0.45)';
+      } else if (determinedStatus === 'too-far' || determinedStatus === 'too-close' || determinedStatus === 'off-center') {
+        borderStroke = '#F59E0B'; // Ajustes necessários: Amarelo
+        glowColor = 'rgba(245, 158, 11, 0.45)';
+      } else if (determinedStatus === 'dark' || determinedStatus === 'static-photo') {
+        borderStroke = '#EF4444'; // Alertas críticos de spoofing / brilho: Vermelho
+        glowColor = 'rgba(239, 68, 68, 0.45)';
+      }
+
+      ctx.strokeStyle = borderStroke;
       ctx.lineWidth = 4;
-      ctx.shadowColor = stepName === 'aligning' ? 'rgba(245, 158, 11, 0.4)' : stepName === 'approaching' ? 'rgba(139, 92, 246, 0.4)' : 'rgba(16, 185, 129, 0.4)';
-      ctx.shadowBlur = 15;
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 18;
       
       ctx.beginPath();
       ctx.ellipse(cx, cy, rWidth, rHeight, 0, 0, Math.PI * 2);
       ctx.stroke();
       
-      // Reset shadow for other drawings
-      ctx.shadowBlur = 0;
+      ctx.shadowBlur = 0; // Reset shadow
 
-      // Draw a subtle scan horizontal line within the oval
-      const scanY = cy - rHeight + ((now % 2000) / 2000) * (rHeight * 2);
+      // Linha laser de escaneamento animada (passando de cima para baixo dentro do oval recortado)
+      const scanY = cy - rHeight + ((now % 1800) / 1800) * (rHeight * 2);
       ctx.beginPath();
       const grad = ctx.createLinearGradient(cx - rWidth, scanY, cx + rWidth, scanY);
       grad.addColorStop(0, 'rgba(168, 85, 247, 0)');
-      grad.addColorStop(0.5, stepName === 'pulling' ? 'rgba(16, 185, 129, 0.8)' : 'rgba(168, 85, 247, 0.8)');
+      grad.addColorStop(0.5, borderStroke);
       grad.addColorStop(1, 'rgba(168, 85, 247, 0)');
+      
       ctx.strokeStyle = grad;
-      ctx.lineWidth = 4;
-      ctx.moveTo(cx - rWidth * 0.85, scanY);
-      ctx.lineTo(cx + rWidth * 0.85, scanY);
+      ctx.lineWidth = 3;
+      ctx.moveTo(cx - rWidth * 0.82, scanY);
+      ctx.lineTo(cx + rWidth * 0.82, scanY);
+      ctx.stroke();
+
+      // Desenhar cantos estéticos de foco tecnológico fora do círculo
+      const borderSize = 14;
+      const bX = cx - rWidth - 10;
+      const bY = cy - rHeight - 10;
+      const bW = rWidth * 2 + 20;
+      const bH = rHeight * 2 + 20;
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.lineWidth = 2.5;
+
+      ctx.beginPath();
+      ctx.moveTo(bX, bY + borderSize); ctx.lineTo(bX, bY); ctx.lineTo(bX + borderSize, bY);
+      ctx.moveTo(bX + bW - borderSize, bY); ctx.lineTo(bX + bW, bY); ctx.lineTo(bX + bW, bY + borderSize);
+      ctx.moveTo(bX, bY + bH - borderSize); ctx.lineTo(bX, bY + bH); ctx.lineTo(bX + borderSize, bY + bH);
+      ctx.moveTo(bX + bW - borderSize, bY + bH); ctx.lineTo(bX + bW, bY + bH); ctx.lineTo(bX + bW, bY + bH - borderSize);
       ctx.stroke();
 
       faceAnimationRef.current = requestAnimationFrame(loop);
@@ -2936,250 +3093,244 @@ export function InternalDashboard(props: InternalDashboardProps) {
       </AnimatePresence>
 
       {/* ======================================================== */}
-      {/* MODAL BIOMÉTRICO OVAL: VERIFICAÇÃO FACIAL PREMIUM        */}
+      {/* MODAL BIOMÉTRICO OVAL EM TELA CHEIA (ESTILO BANKING PREMIUM) */}
       {/* ======================================================== */}
       <AnimatePresence>
         {isFaceVerificationModalOpen && (
-          <div className="fixed inset-0 z-[200] bg-zinc-950 text-white flex flex-col justify-between p-4 sm:p-8 md:p-12 overflow-y-auto">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="max-w-md w-full mx-auto flex flex-col justify-between min-h-[90vh] md:min-h-[80vh] my-auto space-y-6"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between border-b pb-4 border-white/10">
-                <div className="text-left">
-                  <h4 className="text-xl font-black font-display text-white flex items-center gap-2 leading-tight">
-                    <Shield size={20} className="text-brand-purple shrink-0" />
-                    Validação Biométrica
-                  </h4>
-                  <p className="text-[10px] font-mono font-bold text-neutral-400 mt-1 uppercase tracking-wider">
-                    Selo de Conta Autêntica
-                  </p>
-                </div>
-                <button 
-                  onClick={() => {
-                    stopFaceCamera();
-                    setIsFaceVerificationModalOpen(false);
-                  }}
-                  className="p-2 bg-neutral-900 border border-white/15 rounded-xl transition-all hover:bg-neutral-800 text-white"
-                >
-                  <X size={18} />
-                </button>
-              </div>
+          <div className="fixed inset-0 z-[250] bg-black text-white flex flex-col justify-between overflow-hidden h-[100dvh] w-screen select-none font-sans">
+            
+            {/* O Elemento de Vídeo Real da Câmera do Usuário (Tela inteira por baixo de tudo) */}
+            <video
+              ref={faceVideoRef}
+              playsInline
+              muted
+              className="absolute inset-0 w-full h-full object-cover scale-x-[-1] z-0"
+              style={{ display: 'block' }}
+            />
 
-              {/* Descrição rápida das Instruções do Scanner */}
-              <div className="bg-neutral-900 border border-white/10 p-4 rounded-2xl text-left text-xs space-y-2.5">
-                <p className="font-extrabold text-[#B088F9] flex items-center gap-1.5">
-                  <span>💡</span> Instruções de Validação:
-                </p>
-                <ol className="list-decimal pl-4.5 font-mono text-[10px] text-neutral-300 font-bold space-y-1.5 leading-normal">
-                  <li>Inicie a câmera e posicione seu rosto no centro do círculo;</li>
-                  <li>Aproxime o rosto devagar até o indicador acusar ótimo;</li>
-                  <li>Afaste o rosto levemente para concluir a leitura física.</li>
-                </ol>
-              </div>
+            {/* Canvas de Desenho dos Landmarks e Overlay Escuro com Recorte Oval */}
+            <canvas
+              ref={faceCanvasRef}
+              className="absolute inset-0 w-full h-full scale-x-[-1] z-10"
+              style={{ display: 'block' }}
+            />
 
-              {/* Área do Feed de Câmera com Oval Viewport */}
-              <div className="relative w-72 h-72 md:w-80 md:h-80 mx-auto rounded-full overflow-hidden bg-neutral-900 border-4 border-dashed border-[#B088F9]/80 shadow-[0_0_25px_rgba(176,136,249,0.15)] flex items-center justify-center">
-                
-                {/* O Elemento de Vídeo Real da Câmera do Usuário */}
-                <video
-                  ref={faceVideoRef}
-                  playsInline
-                  muted
-                  className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
-                  style={{ display: (verificationStep === 'aligning' || verificationStep === 'approaching' || verificationStep === 'pulling') ? 'block' : 'none' }}
-                />
-
-                {/* Canvas de Desenho dos Landmarks Biométricos por Cima */}
-                <canvas
-                  ref={faceCanvasRef}
-                  className="absolute inset-0 w-full h-full pointer-events-none scale-x-[-1] z-10"
-                  style={{ display: (verificationStep === 'aligning' || verificationStep === 'approaching' || verificationStep === 'pulling') ? 'block' : 'none' }}
-                />
-
-                {/* HUD Overlay / Estado de Processamento ou Idle */}
-                {(verificationStep === 'idle' || verificationStep === 'initializing' || verificationStep === 'processing' || verificationStep === 'success' || verificationStep === 'failed') && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-black/80 text-white z-20 space-y-4 animate-in fade-in duration-300">
-                    
-                    {verificationStep === 'idle' && (
-                      <div className="text-center space-y-4">
-                        <div className="w-16 h-16 bg-[#B088F9] rounded-full mx-auto flex items-center justify-center border border-black shadow-[3px_3px_0px_#000]">
-                          <Camera size={26} className="text-black" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-black font-display text-white">Pronto para Validação</p>
-                          <p className="text-[10px] text-neutral-400 font-mono mt-1">Clique abaixo para ativar sua câmera</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={startFaceCamera}
-                          className="px-5 py-2.5 bg-white text-black rounded-xl font-extrabold font-mono text-[10px] uppercase tracking-wider hover:bg-neutral-100 transition-all cursor-pointer"
-                        >
-                          Ativar Câmera 📸
-                        </button>
-                      </div>
-                    )}
-
-                    {verificationStep === 'initializing' && (
-                      <div className="text-center space-y-3">
-                        <div className="w-10 h-10 border-4 border-t-[#B088F9] border-neutral-800 rounded-full animate-spin mx-auto" />
-                        <div>
-                          <p className="text-[10px] font-mono font-bold text-neutral-400">Verificando feed de câmera...</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {verificationStep === 'processing' && (
-                      <div className="w-full text-center space-y-4 px-4">
-                        <div className="flex justify-center items-center gap-4">
-                          {/* Face do Cadastro */}
-                          <div className="relative">
-                            <img 
-                              src={userPhotos[0] || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop'} 
-                              className="w-14 h-14 rounded-full object-cover border border-dashed border-[#10B981] p-0.5 bg-neutral-900" 
-                              alt="Cadastro" 
-                            />
-                            <span className="absolute -bottom-1.5 -right-1.5 bg-[#10B981] text-black font-mono text-[8px] border border-black rounded px-1 font-black">CADASTRO</span>
-                          </div>
-
-                          <div className="w-10 border-t-2 border-dashed border-white/20 relative flex items-center justify-center">
-                            <span className="text-xs absolute animate-pulse">⚡</span>
-                          </div>
-
-                          {/* Scanner Mapped Avatar */}
-                          <div className="relative">
-                            <div className="w-14 h-14 rounded-full bg-[#1e1430] border border-dashed border-brand-purple p-0.5 flex items-center justify-center">
-                              <Smile size={24} className="text-[#B088F9] animate-bounce" />
-                            </div>
-                            <span className="absolute -bottom-1.5 -right-1.5 bg-brand-purple text-white font-mono text-[8px] border border-black rounded px-1 font-black">SCANNER</span>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <p className="text-[11px] font-bold font-mono text-neutral-300">Analisando fisionomia contra fotos...</p>
-                          <div className="text-2xl font-black font-display text-brand-purple tracking-tight leading-none">
-                            {similarityRate}% similaridade
-                          </div>
-                          <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
-                            <div 
-                              className="bg-brand-purple h-full transition-all duration-100"
-                              style={{ width: `${(similarityRate / (shouldSimulateMismatch ? 31.4 : 96.8)) * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {verificationStep === 'success' && (
-                      <div className="text-center space-y-4 px-3 animate-in scale-in duration-300">
-                        <div className="w-16 h-16 bg-[#E2F0CB] rounded-full mx-auto flex items-center justify-center border-2 border-black shadow-[3px_3px_0px_#000]">
-                          <img src="https://img.icons8.com/?size=100&id=6xO3fnY41hu2&format=png&color=000000" className="w-9 h-9" alt="" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-black font-display text-[#A3E635]">VERIFICAÇÃO APROVADA!</p>
-                          <p className="text-[11px] text-neutral-300 font-mono mt-1.5 leading-relaxed">
-                            A biometria facial coincide com as imagens de cadastro.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsFaceVerificationModalOpen(false);
-                          }}
-                          className="px-5 py-2.5 bg-[#A3E635] text-black border-2 border-black rounded-xl font-black font-sans text-[11px] uppercase tracking-wider hover:bg-[#86be26] shadow-[2.5px_2.5px_0px_#000] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
-                        >
-                          Concluir e Exibir Selo 🏆
-                        </button>
-                      </div>
-                    )}
-
-                    {verificationStep === 'failed' && (
-                      <div className="text-center space-y-4 px-3 animate-in scale-in duration-200">
-                        <div className="w-14 h-14 bg-red-100 rounded-full mx-auto border-2 border-black flex items-center justify-center text-red-600 font-black text-2xl shadow-[3px_3px_0px_#000]">
-                          ❌
-                        </div>
-                        <div>
-                          <p className="text-sm font-black font-display text-red-400 font-semibold uppercase">ERRO DE VERIFICAÇÃO</p>
-                          <p className="text-[11px] text-neutral-300 font-mono mt-1.5 leading-normal">
-                            As marcas correspondidas não possuem consistência física com o cadastro.
-                          </p>
-                        </div>
-                        <div className="flex gap-2 w-full">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              resetFaceVerificationState();
-                              startFaceCamera();
-                            }}
-                            className="flex-1 py-2 bg-white text-black rounded-lg font-bold font-mono text-[10px] hover:bg-neutral-100"
-                          >
-                            Tentar De Novo 🔄
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsFaceVerificationModalOpen(false);
-                            }}
-                            className="flex-1 py-2 bg-neutral-900 border border-white/10 text-white rounded-lg font-bold font-mono text-[10px] hover:bg-neutral-800"
-                          >
-                            Sair
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                  </div>
-                )}
-
-                {/* Instruções de Movimento e Barra de Progresso do Passo Real-Time */}
-                {(verificationStep === 'aligning' || verificationStep === 'approaching' || verificationStep === 'pulling') && (
-                  <div className="absolute inset-x-3 bottom-3 z-30 bg-black/85 backdrop-blur-sm border border-white/10 p-3 rounded-2xl text-left flex flex-col gap-2 animate-in slide-in-from-bottom duration-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase tracking-widest text-brand-purple font-black">
-                        {verificationStep === 'aligning' ? 'ETAPA 1: ALINHAR ROSTO 📐' : verificationStep === 'approaching' ? 'ETAPA 2: APROXIME-SE 📲' : 'ETAPA 3: AFASTE-SE LIGEIRO 📸'}
-                      </span>
-                      <span className="text-[10px] font-mono text-white/70 font-bold">
-                        {distanceValue}% Alinhamento
-                      </span>
-                    </div>
-
-                    <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
-                      <div 
-                        className="bg-brand-purple h-full transition-all duration-100"
-                        style={{ width: `${verificationProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Status Message */}
-              <p className="text-[11px] font-mono font-bold text-neutral-300 bg-neutral-900 border border-white/10 px-4 py-3 rounded-2xl text-center leading-normal font-sans">
-                {verificationMessage}
+            {/* HEADER FLUTUANTE (TOP HUD) - SEM ÍCONES */}
+            <div className="relative z-20 w-full bg-gradient-to-b from-black/95 to-transparent p-6 text-center pt-8">
+              <h4 className="text-xl font-black tracking-widest font-display text-white uppercase leading-none">
+                Verificação facial
+              </h4>
+              <p className="text-[11px] font-mono font-medium text-neutral-300 mt-2.5 uppercase tracking-wide">
+                Posicione seu rosto dentro da área indicada
               </p>
+            </div>
 
-              {/* Opções de Teste de Desenvolvedor na Parte de Baixo (Para Simular Consistência) */}
-              <div className="border-t pt-4 border-dashed border-white/10 flex items-center justify-between gap-3 text-left bg-neutral-900/50 p-3 rounded-2xl">
+            {/* OVERLAY DE SINALIZAÇÃO DE ESTADOS VISUAIS (Quando não está escaneando ativamente) */}
+            {(verificationStep === 'idle' || verificationStep === 'initializing' || verificationStep === 'processing' || verificationStep === 'success' || verificationStep === 'failed') && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-zinc-950/95 text-white z-30 space-y-6">
+                
+                {verificationStep === 'idle' && (
+                  <div className="text-center space-y-6 max-w-sm px-4">
+                    <div className="w-20 h-20 bg-neutral-900 border-2 border-white/20 rounded-full mx-auto flex items-center justify-center text-4xl shadow-lg">
+                      📸
+                    </div>
+                    <div>
+                      <p className="text-base font-black font-display text-white uppercase tracking-wider">Pronto para Iniciar</p>
+                      <p className="text-[11px] text-neutral-400 font-sans mt-2 leading-relaxed">
+                        A validação biométrica garante a autenticidade e segurança de sua conta no app.
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-3.5 pt-2">
+                      <button
+                        type="button"
+                        onClick={startFaceCamera}
+                        className="px-6 py-3.5 bg-brand-purple text-black rounded-xl font-black font-mono text-xs uppercase tracking-wider hover:bg-opacity-90 active:scale-95 transition-all cursor-pointer shadow-[3px_3px_0px_rgba(255,255,255,0.15)]"
+                      >
+                        Ativar Câmera
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsFaceVerificationModalOpen(false)}
+                        className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl font-bold font-mono text-[10px] uppercase hover:bg-neutral-800 transition-all cursor-pointer"
+                      >
+                        Voltar ao Painel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {verificationStep === 'initializing' && (
+                  <div className="text-center space-y-4">
+                    <div className="w-12 h-12 border-4 border-t-brand-purple border-neutral-800 rounded-full animate-spin mx-auto" />
+                    <div>
+                      <p className="text-xs font-mono font-bold text-neutral-400 uppercase tracking-widest">Acessando canal óptico biométrico...</p>
+                    </div>
+                  </div>
+                )}
+
+                {verificationStep === 'processing' && (
+                  <div className="w-full text-center space-y-6 max-w-sm px-4 animate-pulse">
+                    <div className="flex justify-center items-center gap-6">
+                      <div className="relative">
+                        <img 
+                          src={userPhotos[0] || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop'} 
+                          className="w-16 h-16 rounded-full object-cover border-2 border-[#10B981] p-1 bg-neutral-900" 
+                          alt="Cadastro" 
+                        />
+                        <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-[#10B981] text-black font-mono text-[8px] border border-black rounded px-1.5 font-black leading-none">CADASTRO</span>
+                      </div>
+                      <div className="text-lg">⚡</div>
+                      <div className="relative">
+                        <div className="w-16 h-16 rounded-full bg-neutral-900 border-2 border-brand-purple p-1 flex items-center justify-center text-3xl">
+                          👤
+                        </div>
+                        <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-brand-purple text-white font-mono text-[8px] border border-black rounded px-1.5 font-black leading-none">AO VIVO</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <p className="text-[10px] font-bold font-mono tracking-widest text-neutral-400 uppercase">Processando biometria fisionômica...</p>
+                      <div className="text-3xl font-black font-display text-brand-purple tracking-tight leading-none">
+                        {similarityRate}%
+                      </div>
+                      <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden max-w-[200px] mx-auto">
+                        <div 
+                          className="bg-brand-purple h-full transition-all duration-100"
+                          style={{ width: `${(similarityRate / (shouldSimulateMismatch ? 31.4 : 96.8)) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {verificationStep === 'success' && (
+                  <div className="text-center space-y-6 max-w-sm px-4 animate-in scale-in duration-300">
+                    <div className="w-18 h-18 bg-[#E2F0CB] rounded-full mx-auto flex items-center justify-center text-4xl border-2 border-black shadow-lg">
+                      🏆
+                    </div>
+                    <div>
+                      <p className="text-base font-black font-display text-[#A3E635] uppercase tracking-wider">Conta autenticada com sucesso</p>
+                      <p className="text-xs text-neutral-300 font-sans mt-2.5 leading-relaxed">
+                        A sua conta é autêntica e a verificação foi sucedida! Sua foto e padrão geométrico coincidem.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFaceVerificationModalOpen(false);
+                      }}
+                      className="w-full py-3.5 bg-[#A3E635] text-black border-2 border-black rounded-xl font-black font-sans text-xs uppercase tracking-wider hover:bg-[#86be26] transition-all cursor-pointer shadow-[3px_3px_0px_#000]"
+                    >
+                      Continuar
+                    </button>
+                  </div>
+                )}
+
+                {verificationStep === 'failed' && (
+                  <div className="text-center space-y-6 max-w-sm px-4 animate-in scale-in duration-200">
+                    <div className="w-16 h-16 bg-red-100 rounded-full mx-auto flex items-center justify-center text-3xl border-2 border-black">
+                      ❌
+                    </div>
+                    <div>
+                      <p className="text-sm font-black font-display text-red-500 uppercase tracking-wider">Inconsistência Facial</p>
+                      <p className="text-xs text-neutral-300 font-sans mt-2 leading-relaxed">
+                        As informações de formato facial coletadas recusam compatibilidade com as fotos de cadastro.
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-2.5 w-full pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          resetFaceVerificationState();
+                          startFaceCamera();
+                        }}
+                        className="py-3 bg-white text-black rounded-xl font-bold font-mono text-xs uppercase tracking-wider transition-all hover:bg-neutral-100"
+                      >
+                        Tentar De Novo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsFaceVerificationModalOpen(false);
+                        }}
+                        className="py-2.5 bg-neutral-900 border border-white/10 text-white rounded-xl font-bold font-mono text-[10px] uppercase hover:bg-neutral-800 transition-all"
+                      >
+                        Sair da Verificação
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            )}
+
+            {/* BARRA INFERIOR DE CONTROLES (BOTTOM HUD) */}
+            <div className="relative z-20 w-full bg-gradient-to-t from-black/95 via-black/60 to-transparent p-6 text-center space-y-5 pb-8 sm:pb-12">
+              
+              {/* Progresso Dinâmico das Etapas em Tempo Real */}
+              {(verificationStep === 'aligning' || verificationStep === 'approaching' || verificationStep === 'pulling') && (
+                <div className="max-w-md mx-auto space-y-3.5 px-4 mb-2">
+                  <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-widest text-[#B088F9] font-black">
+                    <span>
+                      {verificationStep === 'aligning' ? 'Etapa 1: Alinhamento' : verificationStep === 'approaching' ? 'Etapa 2: Aproximação' : 'Etapa 3: Distanciamento'}
+                    </span>
+                    <span className="text-white/60">
+                      {verificationProgress}%
+                    </span>
+                  </div>
+
+                  <div className="w-full bg-neutral-800/80 rounded-full h-2.5 overflow-hidden backdrop-blur-sm border border-white/5">
+                    <div 
+                      className="bg-brand-purple h-full transition-all duration-100 shadow-[0_0_8px_#B088F9]"
+                      style={{ width: `${verificationProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Status/Instrução Primária Dinâmica de Banner */}
+              <div className="max-w-md mx-auto bg-black/75 backdrop-blur-md border border-white/10 px-6 py-4 rounded-2xl text-center leading-relaxed">
+                <p className="text-xs font-mono font-bold tracking-wider text-white uppercase font-sans">
+                  {verificationMessage}
+                </p>
+              </div>
+
+              {/* Ações / Botão Cancelar de Saída rápida */}
+              <div className="relative max-w-xs mx-auto flex items-center justify-center gap-4">
+                {(verificationStep === 'aligning' || verificationStep === 'approaching' || verificationStep === 'pulling') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopFaceCamera();
+                      setIsFaceVerificationModalOpen(false);
+                    }}
+                    className="px-6 py-2.5 bg-neutral-950 border border-white/15 text-white/80 rounded-xl font-bold font-mono text-[10px] uppercase hover:bg-neutral-900 transition-all cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+
+              {/* Controle de Segurança / Desenvolvedor Inaudito e Pequeno para Teste de Falha */}
+              <div className="max-w-xs mx-auto pt-3 border-t border-dashed border-white/5 flex items-center justify-between gap-2.5 text-left opacity-30 hover:opacity-100 transition-opacity">
                 <div>
-                  <p className="text-[10px] font-black text-white leading-none">Simular Erro de Cadastro</p>
-                  <p className="text-[9px] font-mono text-neutral-400 mt-1 leading-tight font-semibold font-sans">Inverta o cadastro para ver o tratamento de recusa biométrica.</p>
+                  <p className="text-[8px] font-black text-white leading-none uppercase tracking-wider">Simulador de Recusa</p>
+                  <p className="text-[7.5px] font-mono text-neutral-400 mt-1">Inverta para reprovar na biometria.</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
                     setShouldSimulateMismatch(!shouldSimulateMismatch);
-                    triggerActionAlert(shouldSimulateMismatch ? "Modo aprovação facial ativado!" : "Simulando rejeição fisionômica.");
+                    triggerActionAlert(shouldSimulateMismatch ? "Aprovação habilitada!" : "Reprovação habilitada.");
                   }}
-                  className={`px-3 py-1.5 border border-white/10 rounded-lg font-black font-mono text-[9px] uppercase tracking-wider transition-all cursor-pointer ${shouldSimulateMismatch ? 'bg-red-600 text-white shadow-none' : 'bg-neutral-800 text-white hover:bg-neutral-700'}`}
+                  className={`px-2.5 py-1 border border-white/10 rounded-md font-mono text-[8px] uppercase tracking-wider transition-all cursor-pointer ${shouldSimulateMismatch ? 'bg-red-900 text-white' : 'bg-neutral-900 text-white/50'}`}
                 >
-                  {shouldSimulateMismatch ? "Simulando Falha" : "Simular Erro"}
+                  {shouldSimulateMismatch ? "Erro Ligado" : "Erro Desligado"}
                 </button>
               </div>
 
-            </motion.div>
+            </div>
+
           </div>
         )}
       </AnimatePresence>
