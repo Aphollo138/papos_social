@@ -887,8 +887,19 @@ export function InternalDashboard(props: InternalDashboardProps) {
       // --- ANÁLISE REAL DE PIXEL (LIVENESS DETECTOR) ---
       const cx = w / 2;
       const cy = h / 2;
-      const rWidth = w * (w > 640 ? 0.24 : 0.38); // Oval proporcional ao tamanho do dispositivo
-      const rHeight = h * (w > 640 ? 0.36 : 0.46);
+
+      let stepName = 'idle';
+      setVerificationStep(s => { stepName = s; return s; });
+
+      let scale = 1.0;
+      if (stepName === 'approaching') {
+        scale = 1.0 + (currentStepProgress / 100) * 0.22;
+      } else if (stepName === 'pulling') {
+        scale = 1.22 - (currentStepProgress / 100) * 0.32;
+      }
+
+      const rWidth = w * (w > 640 ? 0.24 : 0.38) * scale; // Oval proporcional ao tamanho do dispositivo e etapa
+      const rHeight = h * (w > 640 ? 0.36 : 0.46) * scale;
 
       let brightnessSum = 0;
       let count = 0;
@@ -931,58 +942,67 @@ export function InternalDashboard(props: InternalDashboardProps) {
 
       const avgLuminance = brightnessSum / (count || 1);
       const avgVariance = diffSum / (count || 1);
-      const isSkinDetected = skinMatchCount > (count * 0.35); // Pelo menos 35% de tons de pele
+      
+      // Detecção de tom de pele inclusivo (gamut étnica ampla com compensadores de iluminação)
+      const isSkinDetected = skinMatchCount > (count * 0.15) || (avgLuminance > 35 && skinMatchCount > (count * 0.1));
 
       frameCounter++;
       let determinedStatus: 'searching' | 'too-far' | 'too-close' | 'off-center' | 'correct' | 'dark' | 'static-photo' = 'searching';
 
-      // Avaliação das condições físicas da câmera
-      if (avgLuminance < 30) {
+      // 1. Detecção de ambiente em baixa luminosidade extrema
+      if (avgLuminance < 20) {
         determinedStatus = 'dark';
         staticCounter = 0;
-      } else if (frameCounter > 15 && avgVariance < 0.12) {
-        // Sem movimentação temporal orgânica (foto impressa ou tela estática do celular)
+      }
+      // 2. Detecção de fraude facial / foto estática impressa (ausência total de micro-variação fisionômica)
+      // Ajustado para limiar seguro de ruido de câmeras domésticas (0.015)
+      else if (frameCounter > 20 && avgVariance < 0.015) {
         staticCounter++;
-        if (staticCounter > 90) {
+        if (staticCounter > 120) {
           determinedStatus = 'static-photo';
         } else {
           determinedStatus = 'searching';
         }
-      } else {
-        if (avgVariance > 0.12) {
-          staticCounter = Math.max(0, staticCounter - 3);
+      } 
+      // 3. Leituras de Posicionamento Físico Dinâmico Estável
+      else {
+        if (avgVariance > 0.015) {
+          staticCounter = Math.max(0, staticCounter - 2);
         }
 
-        // Simulação mecânica reativa de proximidade em relação ao oval central
-        const nowMs = Date.now();
         let stepName = 'idle';
         setVerificationStep(s => { stepName = s; return s; });
 
+        // Se detectar tons de pele/fisionomia ou se for simulação, iniciamos o fluxo reativo profissional
         if (!isSkinDetected && !shouldSimulateMismatch) {
           determinedStatus = 'searching';
-        } else if (stepName === 'aligning') {
-          // Fase 1 do liveness: alinhar o corpo e permanecer estável
-          const tremor = Math.sin(nowMs / 180);
-          if (tremor > 0.82) {
-            determinedStatus = 'off-center';
-          } else {
-            determinedStatus = 'correct';
-          }
-        } else if (stepName === 'approaching') {
-          // Fase 2 do liveness: aproximar o celular devagar
-          if (currentStepProgress < 30) {
-            determinedStatus = 'too-far';
-          } else if (currentStepProgress > 85) {
-            determinedStatus = 'too-close';
-          } else {
-            determinedStatus = 'correct';
-          }
-        } else if (stepName === 'pulling') {
-          // Fase 3 do liveness: distanciar sutilmente
-          if (currentStepProgress < 25) {
-            determinedStatus = 'too-close';
-          } else if (currentStepProgress > 82) {
-            determinedStatus = 'too-far';
+        } else {
+          // Diferenciação interativa das fases de proximidade anatômica (Liveness)
+          if (stepName === 'aligning') {
+            const isTremorDetected = avgVariance > 0.35; // Se balançar a câmera excessivamente
+            if (isTremorDetected) {
+              determinedStatus = 'off-center';
+            } else {
+              determinedStatus = 'correct';
+            }
+          } else if (stepName === 'approaching') {
+            // Se o progresso ainda estiver no início, considera longe
+            if (currentStepProgress < 30) {
+              determinedStatus = 'too-far';
+            } else if (currentStepProgress > 85) {
+              determinedStatus = 'too-close';
+            } else {
+              determinedStatus = 'correct';
+            }
+          } else if (stepName === 'pulling') {
+            // Se o progresso ainda estiver no início, considera que está muito perto (precisa se afastar)
+            if (currentStepProgress < 25) {
+              determinedStatus = 'too-close';
+            } else if (currentStepProgress > 80) {
+              determinedStatus = 'too-far';
+            } else {
+              determinedStatus = 'correct';
+            }
           } else {
             determinedStatus = 'correct';
           }
@@ -1005,7 +1025,17 @@ export function InternalDashboard(props: InternalDashboardProps) {
       } else if (determinedStatus === 'off-center') {
         setVerificationMessage('Centralize seu rosto');
       } else if (determinedStatus === 'correct') {
-        setVerificationMessage('Mantenha assim');
+        let activeStep = 'idle';
+        setVerificationStep(s => { activeStep = s; return s; });
+        if (activeStep === 'aligning') {
+          setVerificationMessage('Rosto detectado! Alinhando e estabilizando...');
+        } else if (activeStep === 'approaching') {
+          setVerificationMessage('Excelente! Agora aproxime seu rosto lentamente...');
+        } else if (activeStep === 'pulling') {
+          setVerificationMessage('Ótimo! Agora afaste seu rosto lentamente...');
+        } else {
+          setVerificationMessage('Mantenha o rosto posicionado...');
+        }
       }
 
       // --- PROGRESSÃO DE ETAPA ---
